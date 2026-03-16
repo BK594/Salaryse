@@ -1,0 +1,2936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Software Factory Orchestrator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f3;
+    --color-background-tertiary: #eeede8;
+    --color-text-primary: #1a1a18;
+    --color-text-secondary: #5f5e5a;
+    --color-text-tertiary: #888780;
+    --color-border-tertiary: rgba(0,0,0,0.12);
+    --color-border-secondary: rgba(0,0,0,0.22);
+    --color-border-primary: rgba(0,0,0,0.35);
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', monospace;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1e1e1c;
+      --color-background-secondary: #2a2a28;
+      --color-background-tertiary: #141412;
+      --color-text-primary: #f0efe9;
+      --color-text-secondary: #b4b2a9;
+      --color-text-tertiary: #888780;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+      --color-border-secondary: rgba(255,255,255,0.2);
+      --color-border-primary: rgba(255,255,255,0.3);
+    }
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    min-height: 100vh;
+    padding: 24px;
+    color: var(--color-text-primary);
+  }
+
+  .factory {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 700px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    background: var(--color-background-primary);
+    max-width: 1100px;
+    margin: 0 auto;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  }
+
+  .sidebar {
+    background: var(--color-background-secondary);
+    border-right: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .sidebar-header {
+    padding: 16px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .sidebar-header h2 {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .sidebar-header p {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    line-height: 1.4;
+  }
+
+  .pipeline-list { padding: 8px; flex: 1; }
+
+  .agent-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    margin-bottom: 2px;
+    border: 0.5px solid transparent;
+    transition: background 0.15s;
+  }
+
+  .agent-item:hover { background: var(--color-background-primary); border-color: var(--color-border-tertiary); }
+  .agent-item.active { background: var(--color-background-primary); border-color: var(--color-border-secondary); }
+  .agent-item.gate { background: #FAEEDA; border-color: #FAC775; }
+
+  .agent-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 500; flex-shrink: 0;
+    background: var(--color-background-secondary);
+    color: var(--color-text-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .agent-item.complete .agent-num { background: #EAF3DE; color: #3B6D11; border-color: #97C459; }
+  .agent-item.running .agent-num { background: #E6F1FB; color: #185FA5; border-color: #85B7EB; animation: pulse 1.5s ease-in-out infinite; }
+  .agent-item.error .agent-num { background: #FCEBEB; color: #A32D2D; border-color: #F09595; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  .agent-label { flex: 1; min-width: 0; }
+  .agent-label strong { display: block; font-size: 13px; font-weight: 500; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent-label span { display: block; font-size: 11px; color: var(--color-text-tertiary); }
+
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-border-secondary); flex-shrink: 0; }
+  .agent-item.complete .status-dot { background: #639922; }
+  .agent-item.running .status-dot { background: #378ADD; animation: pulse 1.5s ease-in-out infinite; }
+  .agent-item.error .status-dot { background: #E24B4A; }
+
+  .connector { width: 1px; height: 8px; background: var(--color-border-tertiary); margin: 0 auto 2px; margin-left: 19px; }
+
+  .main-panel { display: flex; flex-direction: column; overflow: hidden; }
+
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-primary);
+    flex-shrink: 0; flex-wrap: wrap; gap: 10px;
+  }
+
+  .top-bar h1 { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+  .top-bar p { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+
+  .btn {
+    padding: 8px 18px; border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: background 0.15s; font-family: var(--font-sans);
+  }
+
+  .btn:hover { background: var(--color-background-secondary); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn.primary { background: #185FA5; color: white; border-color: #185FA5; }
+  .btn.primary:hover { background: #0C447C; }
+
+  .content-area { flex: 1; overflow-y: auto; padding: 20px; }
+
+  .input-section { margin-bottom: 20px; }
+  .input-section label { display: block; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 6px; }
+
+  .input-section textarea {
+    width: 100%; min-height: 100px; padding: 10px 12px;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    font-size: 14px; font-family: var(--font-sans); resize: vertical; line-height: 1.5;
+  }
+
+  .input-section textarea:focus { outline: none; border-color: var(--color-border-primary); }
+
+  .agent-view { display: none; }
+  .agent-view.visible { display: block; }
+
+  .agent-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
+
+  .agent-icon {
+    width: 48px; height: 48px; border-radius: var(--border-radius-md);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+    border: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary);
+  }
+
+  .agent-meta h2 { font-size: 18px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
+  .agent-meta p { font-size: 13px; color: var(--color-text-secondary); line-height: 1.5; }
+
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 3px 10px; border-radius: 100px;
+    font-size: 11px; font-weight: 500; margin-top: 6px;
+    border: 0.5px solid transparent;
+  }
+
+  .badge.idle { background: var(--color-background-secondary); color: var(--color-text-secondary); border-color: var(--color-border-tertiary); }
+  .badge.running { background: #E6F1FB; color: #185FA5; border-color: #85B7EB; }
+  .badge.complete { background: #EAF3DE; color: #3B6D11; border-color: #97C459; }
+  .badge.error { background: #FCEBEB; color: #A32D2D; border-color: #F09595; }
+  .badge.waiting { background: #FAEEDA; color: #854F0B; border-color: #EF9F27; }
+
+  .section-card {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 16px; margin-bottom: 16px;
+    background: var(--color-background-primary);
+  }
+
+  .section-card h3 {
+    font-size: 11px; font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
+  }
+
+  .artifact-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .artifact-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-secondary);
+    font-size: 13px; cursor: default; transition: border-color 0.15s;
+  }
+
+  .artifact-item:hover { border-color: var(--color-border-secondary); }
+  .artifact-item .file-icon { font-size: 14px; width: 20px; text-align: center; }
+  .artifact-item strong { font-weight: 500; color: var(--color-text-primary); flex: 1; }
+  .artifact-item small { color: var(--color-text-tertiary); font-size: 11px; }
+
+  .output-block {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 14px; font-size: 13px;
+    font-family: var(--font-mono);
+    color: var(--color-text-primary);
+    line-height: 1.7; white-space: pre-wrap;
+    border: 0.5px solid var(--color-border-tertiary);
+    max-height: 320px; overflow-y: auto;
+  }
+
+  .responsibilities { display: flex; flex-direction: column; gap: 6px; }
+
+  .resp-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--color-text-primary); line-height: 1.4;
+  }
+
+  .resp-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-border-primary); flex-shrink: 0; }
+
+  .gate-panel {
+    background: #FAEEDA; border: 0.5px solid #FAC775;
+    border-radius: var(--border-radius-lg);
+    padding: 16px 20px; margin-bottom: 16px;
+  }
+
+  .gate-panel h3 { font-size: 15px; font-weight: 500; color: #633806; margin-bottom: 5px; }
+  .gate-panel p { font-size: 13px; color: #854F0B; line-height: 1.6; margin-bottom: 14px; }
+
+  .gate-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .gate-btn {
+    padding: 8px 16px; border-radius: var(--border-radius-md);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    border: 0.5px solid transparent; transition: all 0.15s;
+    font-family: var(--font-sans);
+  }
+
+  .gate-btn.approve { background: #EAF3DE; color: #3B6D11; border-color: #97C459; }
+  .gate-btn.approve:hover { background: #C0DD97; }
+  .gate-btn.approve:disabled { opacity: 0.5; cursor: not-allowed; }
+  .gate-btn.revise-apply { background: #E6F1FB; color: #185FA5; border-color: #85B7EB; }
+  .gate-btn.revise-apply:hover { background: #B5D4F4; }
+  .gate-btn.revise-apply:disabled { opacity: 0.5; cursor: not-allowed; }
+  .gate-btn.reject { background: #FCEBEB; color: #A32D2D; border-color: #F09595; }
+  .gate-btn.reject:hover { background: #F7C1C1; }
+
+  .feedback-section-title {
+    font-size: 11px; font-weight: 500; color: var(--color-text-secondary);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin: 0 0 10px;
+  }
+
+  .feedback-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+  .feedback-row {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-background-primary);
+    overflow: hidden;
+  }
+
+  .feedback-row-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; cursor: pointer; transition: background 0.15s;
+    user-select: none;
+  }
+
+  .feedback-row-header:hover { background: var(--color-background-secondary); }
+
+  .feedback-row-title { display: flex; align-items: center; gap: 8px; }
+  .feedback-row-title .frt-icon { font-size: 15px; }
+  .feedback-row-title .frt-name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+  .feedback-row-title .frt-role { font-size: 11px; color: var(--color-text-tertiary); }
+
+  .frt-has-input {
+    font-size: 11px; padding: 2px 7px; border-radius: 100px;
+    background: #FAEEDA; color: #854F0B; border: 0.5px solid #EF9F27;
+    display: none;
+  }
+
+  .feedback-chevron { font-size: 10px; color: var(--color-text-tertiary); transition: transform 0.2s; }
+  .feedback-chevron.open { transform: rotate(180deg); }
+
+  .feedback-row-body { display: none; padding: 12px 14px; border-top: 0.5px solid var(--color-border-tertiary); }
+  .feedback-row-body.open { display: block; }
+
+  .feedback-row-body label { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+
+  .feedback-row-body textarea {
+    width: 100%; min-height: 68px; padding: 8px 10px;
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    font-size: 13px; font-family: var(--font-sans);
+    resize: vertical; line-height: 1.5; margin-bottom: 8px;
+  }
+
+  .feedback-row-body textarea:focus { outline: none; border-color: var(--color-border-primary); }
+
+  .feedback-saved-tag {
+    display: none; align-items: center; gap: 5px;
+    font-size: 11px; color: #3B6D11;
+    background: #EAF3DE; border: 0.5px solid #97C459;
+    padding: 3px 8px; border-radius: 100px; margin-left: 8px;
+  }
+
+  .memory-panel {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-background-primary);
+    margin-bottom: 16px; overflow: hidden;
+  }
+
+  .memory-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary);
+  }
+
+  .memory-panel-header h3 { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .memory-count {
+    font-size: 11px; padding: 2px 8px; border-radius: 100px;
+    background: #E6F1FB; color: #185FA5; border: 0.5px solid #85B7EB;
+  }
+
+  .memory-list { padding: 8px; display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+
+  .memory-entry {
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    padding: 9px 12px; background: var(--color-background-secondary);
+  }
+
+  .memory-entry-top {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap;
+  }
+
+  .mem-agent-badge {
+    font-size: 11px; font-weight: 500; color: #185FA5;
+    background: #E6F1FB; border: 0.5px solid #85B7EB;
+    padding: 2px 7px; border-radius: 100px;
+  }
+
+  .mem-applied-badge {
+    font-size: 11px; color: #3B6D11;
+    background: #EAF3DE; border: 0.5px solid #97C459;
+    padding: 2px 7px; border-radius: 100px;
+  }
+
+  .mem-time { font-size: 11px; color: var(--color-text-tertiary); margin-left: auto; }
+
+  .memory-entry .mem-feedback { font-size: 12px; color: var(--color-text-primary); line-height: 1.5; margin-bottom: 5px; }
+
+  .memory-entry .mem-learning {
+    font-size: 11px; color: var(--color-text-tertiary);
+    padding-top: 5px; border-top: 0.5px solid var(--color-border-tertiary);
+    font-style: italic; line-height: 1.4;
+  }
+
+  .empty-memory { padding: 20px; text-align: center; font-size: 13px; color: var(--color-text-tertiary); }
+
+  .revising-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: #185FA5; padding: 6px 0;
+  }
+
+  .spin {
+    width: 13px; height: 13px; border: 2px solid #B5D4F4;
+    border-top-color: #185FA5; border-radius: 50%;
+    animation: spin 0.8s linear infinite; flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+
+  .metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px; text-align: center; }
+  .metric-card .val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); display: block; }
+  .metric-card .lbl { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+
+  .tabs {
+    display: flex; gap: 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    padding: 10px 16px; font-size: 13px; cursor: pointer;
+    color: var(--color-text-secondary);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -0.5px; transition: color 0.15s; white-space: nowrap;
+  }
+
+  .tab:hover { color: var(--color-text-primary); }
+  .tab.active { color: var(--color-text-primary); border-bottom-color: #185FA5; font-weight: 500; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--color-text-tertiary); font-size: 14px; line-height: 1.6; }
+  .empty-state p { margin-top: 8px; font-size: 13px; }
+
+  .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .overview-card { border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px; }
+  .overview-card h3 { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+
+  .progress-bar-wrap { background: var(--color-background-secondary); border-radius: 100px; height: 6px; margin-top: 8px; overflow: hidden; }
+  .progress-bar { height: 100%; background: #378ADD; border-radius: 100px; transition: width 0.5s ease; }
+
+  .top-controls { display: flex; gap: 8px; align-items: center; }
+  .progress-wrap { display: none; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-secondary); }
+
+  .artifact-item { cursor: default; }
+  .artifact-actions { display: flex; gap: 5px; margin-left: auto; flex-shrink: 0; }
+
+  .artifact-btn {
+    padding: 4px 10px; border-radius: var(--border-radius-md);
+    font-size: 11px; font-weight: 500; cursor: pointer;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary); font-family: var(--font-sans);
+    transition: background 0.12s; white-space: nowrap;
+  }
+  .artifact-btn:hover { background: var(--color-background-secondary); }
+  .artifact-btn.primary { background: #185FA5; color: white; border-color: #185FA5; }
+  .artifact-btn.primary:hover { background: #0C447C; }
+
+  .artifact-viewer {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; padding: 24px;
+  }
+
+  .artifact-viewer-box {
+    background: var(--color-background-primary);
+    border-radius: var(--border-radius-lg);
+    border: 0.5px solid var(--color-border-secondary);
+    width: 100%; max-width: 760px;
+    max-height: 80vh; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .artifact-viewer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 0.5px solid var(--color-border-tertiary);
+    flex-shrink: 0;
+  }
+
+  .artifact-viewer-header h3 { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+
+  .artifact-viewer-actions { display: flex; gap: 8px; align-items: center; }
+
+  .artifact-close {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-tertiary);
+    background: var(--color-background-secondary); cursor: pointer;
+    font-size: 14px; color: var(--color-text-secondary);
+    transition: background 0.12s; font-family: var(--font-sans);
+  }
+  .artifact-close:hover { background: var(--color-background-tertiary); }
+
+  .artifact-viewer-body {
+    flex: 1; overflow-y: auto; padding: 18px;
+    font-family: var(--font-mono); font-size: 13px;
+    color: var(--color-text-primary); line-height: 1.7; white-space: pre-wrap;
+  }
+
+  .tab-feedback-dot {
+    display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; background: #EF9F27;
+    margin-left: 4px; vertical-align: middle; margin-top: -2px;
+  }
+
+  /* ── Orchestrator Role Panel ──────────────────────── */
+  .role-panel {
+    margin: 0;
+    border-top: 0.5px solid rgba(255,255,255,0.07);
+    flex-shrink: 0;
+  }
+
+  .role-panel-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; cursor: pointer;
+    user-select: none;
+    transition: background 0.12s;
+  }
+  .role-panel-header:hover { background: rgba(255,255,255,0.04); }
+
+  .role-panel-title {
+    font-size: 10px; font-weight: 600; letter-spacing: .09em;
+    text-transform: uppercase; color: #5f5e5a; flex: 1;
+  }
+
+  .role-active-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #3B6D11; flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(59,109,17,0.3);
+  }
+
+  .role-chevron {
+    font-size: 10px; color: #5f5e5a;
+    transition: transform 0.18s; flex-shrink: 0;
+  }
+  .role-chevron.open { transform: rotate(180deg); }
+
+  .role-panel-body {
+    max-height: 0; overflow: hidden;
+    transition: max-height 0.25s ease;
+    padding: 0 10px;
+  }
+  .role-panel-body.open { max-height: 400px; }
+
+  .role-panel-body textarea {
+    width: 100%; min-height: 180px;
+    background: rgba(255,255,255,0.04);
+    border: 0.5px solid rgba(255,255,255,0.09);
+    border-radius: 7px; padding: 10px;
+    font-size: 11px; line-height: 1.65;
+    color: #b4b2a9; font-family: var(--font-mono);
+    resize: vertical; outline: none;
+    transition: border-color 0.12s;
+    margin-bottom: 8px;
+  }
+  .role-panel-body textarea:focus {
+    border-color: rgba(24,95,165,0.6);
+    background: rgba(255,255,255,0.06);
+    color: #d3d1c7;
+  }
+
+  .role-panel-actions {
+    display: flex; gap: 6px; padding-bottom: 10px;
+  }
+
+  .role-panel-btn {
+    flex: 1; padding: 5px 8px; border-radius: 6px;
+    font-size: 11px; font-weight: 500; cursor: pointer;
+    font-family: var(--font-sans); transition: background 0.12s;
+    border: 0.5px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.05); color: #b4b2a9;
+  }
+  .role-panel-btn:hover { background: rgba(255,255,255,0.1); color: #d3d1c7; }
+  .role-panel-btn.save {
+    background: rgba(24,95,165,0.35); color: #85B7EB;
+    border-color: rgba(24,95,165,0.4);
+  }
+  .role-panel-btn.save:hover { background: rgba(24,95,165,0.55); color: #fff; }
+
+  /* ── Role badge in top-bar ─────────────────────────*/
+  .role-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 100px;
+    background: rgba(59,109,17,0.12);
+    border: 0.5px solid rgba(59,109,17,0.3);
+    font-size: 11px; font-weight: 500; color: #97C459;
+    cursor: pointer; user-select: none;
+    transition: background 0.12s;
+  }
+  .role-badge:hover { background: rgba(59,109,17,0.2); }
+  .role-badge .role-badge-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: #97C459;
+  }
+
+  /* ── Role indicator strip below top-bar ───────────*/
+  .role-strip {
+    padding: 6px 24px;
+    background: rgba(59,109,17,0.06);
+    border-bottom: 0.5px solid rgba(59,109,17,0.15);
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: #97C459;
+  }
+  .role-strip strong { font-weight: 600; color: #3B6D11; }
+  .role-strip-preview {
+    flex: 1; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; color: #5f7a44;
+    font-family: var(--font-mono);
+  }
+
+  .copy-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #2C2C2A; color: #D3D1C7; padding: 8px 18px;
+    border-radius: var(--border-radius-md); font-size: 13px;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 9999;
+  }
+  .copy-toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="factory" id="factory">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>Pipeline</h2>
+      <p>AI Software Factory — 11 agents + 1 approval gate</p>
+    </div>
+    <div class="pipeline-list" id="pipelineList"></div>
+
+    <!-- Claude API Key -->
+    <div style="padding:10px 14px;border-top:0.5px solid var(--color-border-tertiary);flex-shrink:0;">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:#5f5e5a;margin-bottom:6px;">Claude API Key</div>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-..." style="width:100%;padding:6px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:11px;font-family:var(--font-mono);background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box;" />
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+        <button onclick="saveApiKey()" style="flex:1;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;font-family:var(--font-sans);border:0.5px solid rgba(24,95,165,0.4);background:rgba(24,95,165,0.35);color:#85B7EB;">Save key</button>
+        <span id="apiKeySavedTag" style="display:none;font-size:11px;color:#3B6D11;background:#EAF3DE;border:0.5px solid #97C459;padding:2px 7px;border-radius:100px;">✓ Saved</span>
+      </div>
+      <div id="apiKeyStatus" style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px;"></div>
+    </div>
+
+    <!-- Orchestrator Role Panel -->
+    <div class="role-panel" id="rolePanel">
+      <div class="role-panel-header" onclick="toggleRolePanel()">
+        <div class="role-active-dot"></div>
+        <span class="role-panel-title">Orchestrator Role</span>
+        <span class="role-chevron" id="roleChevron">▾</span>
+      </div>
+      <div class="role-panel-body" id="rolePanelBody">
+        <textarea id="roleTextarea" spellcheck="false" placeholder="Define the orchestrator role..."></textarea>
+        <div class="role-panel-actions">
+          <button class="role-panel-btn" onclick="resetRole()">Reset</button>
+          <button class="role-panel-btn save" onclick="saveRole()">Apply role ✓</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-panel">
+    <div class="top-bar">
+      <div>
+        <h1 id="topTitle">AI Software Factory Orchestrator</h1>
+        <p id="topSub">Define a business requirement and run the full engineering pipeline</p>
+      </div>
+      <div class="top-controls">
+        <div class="progress-wrap" id="globalProgress">
+          <span id="progressLabel">Running...</span>
+          <div class="progress-bar-wrap" style="width:120px;">
+            <div class="progress-bar" id="globalBar" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="role-badge" onclick="toggleRolePanel(true)" title="Active orchestrator role — click to edit">
+          <span class="role-badge-dot"></span>
+          <span id="roleBadgeLabel">Role active</span>
+        </div>
+        <button class="btn" onclick="resetPipeline()">Reset</button>
+        <button class="btn primary" id="runBtn" onclick="startPipeline()">Run pipeline ↗</button>
+      </div>
+    </div>
+    <div class="role-strip" id="roleStrip">
+      <strong>Orchestrator role:</strong>
+      <span class="role-strip-preview" id="roleStripPreview"></span>
+    </div>
+
+    <div class="content-area" id="contentArea">
+      <div id="homeView">
+        <div class="input-section">
+          <label>Business requirement</label>
+          <textarea id="brdInput" placeholder="Describe your product idea or business requirement...&#10;&#10;Example: Build a multi-tenant SaaS platform for e-commerce order management with real-time inventory tracking, automated refund processing, and fraud detection."></textarea>
+        </div>
+
+        <div class="input-section">
+          <label>Tech stack context</label>
+          <textarea id="techInput" style="min-height:60px;" placeholder="e.g., Node.js microservices, PostgreSQL, Redis, React, AWS, Kubernetes..."></textarea>
+        </div>
+
+        <div class="overview-grid">
+          <div class="overview-card">
+            <h3>Pipeline stages</h3>
+            <div id="stageList" style="font-size:13px; color:var(--color-text-primary); line-height:2;"></div>
+          </div>
+          <div class="overview-card">
+            <h3>Output artifacts</h3>
+            <div style="font-size:13px; color:var(--color-text-secondary); line-height:1.9;">
+              product_prd.md<br>design-system/<br>architecture_design.md<br>
+              api_contracts.yaml<br>service_registry.json<br>
+              impact_analysis_report.md<br>review_report.md<br>
+              security_audit.md<br>test_results.json<br>
+              performance_report.md<br>documentation/<br>release_notes.md
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="agentView" class="agent-view"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const AGENTS = [
+  {
+    id: 'product', num: 1, label: 'Product agent', role: 'Product manager', icon: '📋',
+    desc: 'Converts the business requirement into a structured PRD with user personas, stories, and success metrics.',
+    responsibilities: ['Understand business goals','Define user personas','Write user stories','Define success metrics','Scope feature list'],
+    artifacts: [{ name: 'product_prd.md', icon: '📄', size: '~8 KB' }],
+    output: `# Product Requirement Document\n\n## Feature name\nOrder Management Platform\n\n## Problem statement\nBusinesses lack a unified, scalable system for managing orders, tracking inventory in real time, and handling automated refunds with fraud detection built in.\n\n## User personas\n- Operations Manager: Needs real-time order visibility and bulk processing\n- Customer Service Rep: Needs quick refund initiation and status lookup\n- Finance Analyst: Needs automated reconciliation and reporting\n- System Admin: Needs tenant management and audit trails\n\n## User stories\n- As an Ops Manager, I want to view all active orders on a live dashboard\n- As a CS Rep, I want to initiate refunds in < 3 clicks\n- As a Finance Analyst, I want automated daily P&L reconciliation exports\n- As an Admin, I want to create and configure tenant accounts\n\n## Acceptance criteria\n- Order creation API responds in < 200ms at p99\n- Refund processing completes within 5 business minutes\n- Fraud scoring runs synchronously before order confirmation\n- Dashboard updates in real time via WebSocket\n\n## Success metrics\n- API uptime: 99.9%\n- Order processing latency: < 200ms p99\n- Refund processing time: < 5 min\n- Fraud false-positive rate: < 0.5%\n\n## Dependencies\n- Payment gateway integration (Stripe)\n- Notification service (SendGrid / FCM)\n- Fraud scoring model (internal ML service)`
+  },
+  {
+    id: 'design', num: 2, label: 'Design system agent', role: 'Design system architect', icon: '🎨',
+    desc: 'Creates a centralized design system with tokens, reusable components, and layout guidelines.',
+    responsibilities: ['Define color tokens','Define typography scale','Define spacing system','Build component library','Document layout patterns'],
+    artifacts: [
+      { name: 'design-system/colors.json', icon: '🎨', size: '~2 KB' },
+      { name: 'design-system/typography.json', icon: '📝', size: '~1 KB' },
+      { name: 'design-system/spacing.json', icon: '📐', size: '~1 KB' },
+      { name: 'design-system/components/', icon: '📁', size: '~24 KB' },
+      { name: 'layout-guidelines.md', icon: '📄', size: '~5 KB' },
+      { name: 'design-system-viewer.html', icon: '🖥️', size: '~18 KB', isHtml: true },
+      { name: 'design-prototype.html', icon: '📱', size: '~22 KB', isHtml: true },
+    ],
+    output: `// colors.json\n{\n  "primary": { "50": "#E6F1FB", "500": "#185FA5", "900": "#042C53" },\n  "success": { "50": "#EAF3DE", "500": "#3B6D11" },\n  "danger":  { "50": "#FCEBEB", "500": "#A32D2D" },\n  "warning": { "50": "#FAEEDA", "500": "#854F0B" },\n  "neutral": { "50": "#F1EFE8", "500": "#5F5E5A" }\n}\n\n// typography.json\n{\n  "fontFamily": { "sans": "system-ui, sans-serif", "mono": "monospace" },\n  "scale": {\n    "xs": "11px", "sm": "13px", "base": "15px",\n    "lg": "18px", "xl": "22px", "2xl": "28px"\n  },\n  "weight": { "regular": 400, "medium": 500 }\n}\n\n// spacing.json\n{ "1": "4px", "2": "8px", "3": "12px", "4": "16px",\n  "5": "20px", "6": "24px", "8": "32px", "10": "40px" }\n\n// Components defined:\n- Button (primary, secondary, danger, ghost)\n- Input, Select, Textarea, Checkbox, Radio\n- Modal, Drawer, Tooltip, Popover\n- Table, DataGrid, Pagination\n- Card, Badge, Alert, Toast\n- Tabs, Accordion, Sidebar\n- DashboardLayout, FormLayout, SettingsLayout`
+  },
+  {
+    id: 'architecture', num: 3, label: 'Architecture agent', role: 'System architect', icon: '🏛️',
+    desc: 'Designs the full technical architecture — modules, APIs, service boundaries, database schema, and integration patterns.',
+    responsibilities: ['Define system modules','Design API contracts','Set service boundaries','Design database schema','Define integration patterns'],
+    artifacts: [
+      { name: 'architecture_design.md', icon: '📄', size: '~15 KB' },
+      { name: 'api_contracts.yaml', icon: '📋', size: '~10 KB' },
+      { name: 'system_architecture_diagram', icon: '🖼️', size: '~4 KB' },
+    ],
+    output: `# System architecture\n\n## Services\n- order-service       → Order lifecycle management\n- user-service        → Auth, profiles, tenant management\n- payment-service     → Payment processing (Stripe)\n- protection-service  → Fraud scoring + risk engine\n- notification-service → Email, SMS, push (async)\n- analytics-service   → Reporting, aggregations, exports\n\n## API contracts (excerpt)\nPOST   /api/v1/orders/create\nGET    /api/v1/orders/{id}/status\nPOST   /api/v1/refunds/initiate\nGET    /api/v1/analytics/dashboard\nPOST   /api/v1/auth/token\n\n## Database schema (PostgreSQL)\norders(id, tenant_id, user_id, status, total, created_at)\norder_items(id, order_id, sku, qty, price)\nrefunds(id, order_id, amount, reason, status)\nfraud_scores(id, order_id, score, signals, reviewed_at)\nusers(id, tenant_id, email, role, created_at)\n\n## Event flow\nOrder Created → Risk Scoring → Protection Service\n             → Payment Service → Notification Service\n\n## Infrastructure\n- Kubernetes (EKS) — container orchestration\n- API Gateway (Kong) — routing, auth, rate limiting\n- Redis — session cache, queue\n- RabbitMQ — async event bus\n- PostgreSQL (RDS) — primary datastore\n- S3 — artifact / export storage`
+  },
+  {
+    id: 'gate', num: '⛩', label: 'Human approval gate', role: 'Approval required', icon: '🚦', isGate: true,
+    desc: 'Pipeline pauses here. Architecture must be reviewed and approved before development begins.',
+    artifacts: [], output: ''
+  },
+  {
+    id: 'development', num: 4, label: 'Development agent', role: 'Senior software engineer', icon: '💻',
+    desc: 'Builds production-grade modular services with API-first architecture, impact analysis, and full test coverage setup.',
+    responsibilities: ['Implement modular services','Build API-first endpoints','Write controller/service/repository layers','Validate dependencies','Produce impact analysis'],
+    artifacts: [
+      { name: 'modules/order-service/', icon: '📁', size: '~32 KB' },
+      { name: 'modules/payment-service/', icon: '📁', size: '~28 KB' },
+      { name: 'modules/user-service/', icon: '📁', size: '~24 KB' },
+      { name: 'modules/notification-service/', icon: '📁', size: '~18 KB' },
+      { name: 'impact_analysis_report.md', icon: '📄', size: '~6 KB' },
+    ],
+    output: `// order-service/controller/orders.controller.ts\n@Controller('/api/v1/orders')\nexport class OrdersController {\n  constructor(private ordersService: OrdersService) {}\n\n  @Post('/create')\n  @UseGuards(AuthGuard, TenantGuard)\n  @UsePipes(CreateOrderPipe)\n  async createOrder(@Body() dto: CreateOrderDto, @Tenant() tenant: string) {\n    return this.ordersService.create(dto, tenant);\n  }\n\n  @Get(':id/status')\n  @UseGuards(AuthGuard)\n  async getStatus(@Param('id') id: string) {\n    return this.ordersService.getStatus(id);\n  }\n}\n\n// order-service/service/orders.service.ts\n@Injectable()\nexport class OrdersService {\n  async create(dto: CreateOrderDto, tenantId: string) {\n    const order = await this.repo.create({ ...dto, tenantId });\n    await this.eventBus.emit('order.created', { orderId: order.id });\n    return { status: 'success', data: order };\n  }\n}\n\n// Module structure enforced across all services:\n// controller → service → repository → routes → validation → tests`
+  },
+  {
+    id: 'orchestrator', num: 5, label: 'Service orchestrator', role: 'Service governance layer', icon: '🔗',
+    desc: 'Maintains the service registry, tracks dependency graphs, and prevents circular dependencies or tight coupling.',
+    responsibilities: ['Maintain service registry','Track dependency graph','Detect circular deps','Prevent duplicate services','Enforce loose coupling'],
+    artifacts: [
+      { name: 'service_registry.json', icon: '📋', size: '~4 KB' },
+      { name: 'service_dependency_map.md', icon: '📄', size: '~3 KB' },
+    ],
+    output: `// service_registry.json\n{\n  "services": [\n    {\n      "name": "order-service",\n      "version": "v1.0.0",\n      "status": "healthy",\n      "dependencies": ["user-service", "protection-service", "payment-service"]\n    },\n    {\n      "name": "protection-service",\n      "version": "v1.0.0",\n      "status": "healthy",\n      "dependencies": ["order-service", "scoring-service"]\n    },\n    {\n      "name": "payment-service",\n      "version": "v1.0.0",\n      "status": "healthy",\n      "dependencies": ["order-service", "notification-service"]\n    },\n    {\n      "name": "notification-service",\n      "version": "v1.0.0",\n      "status": "healthy",\n      "dependencies": []\n    }\n  ]\n}\n\n// Dependency analysis\n[PASS] No circular dependencies detected\n[PASS] No duplicate service definitions\n[PASS] All inter-service calls go through REST/events\n[WARN] protection-service <-> order-service: bidirectional — review coupling`
+  },
+  {
+    id: 'review', num: 6, label: 'Code review agent', role: 'Senior code reviewer', icon: '🔍',
+    desc: 'Reviews code for standards compliance, architecture conformance, logic correctness, and dependency correctness.',
+    responsibilities: ['Check coding standards','Verify architecture compliance','Validate business logic','Review dependency usage','Loop back if issues found'],
+    artifacts: [{ name: 'review_report.md', icon: '📄', size: '~7 KB' }],
+    output: `# Code review report — v1.0.0\n\n## Summary\nStatus: APPROVED (1 minor comment)\nReviewer: Code Review Agent\nDate: 2025-01-15\n\n## Checks passed\n[PASS] TypeScript strict mode enabled\n[PASS] All controllers use DTOs with class-validator\n[PASS] No raw SQL — Prisma ORM used throughout\n[PASS] Service layer separated from controller logic\n[PASS] Repository pattern correctly implemented\n[PASS] API responses follow standard { status, data } format\n[PASS] Versioned routes (/api/v1/...)\n[PASS] Auth guards applied to all protected endpoints\n[PASS] No secrets hardcoded — environment variables used\n[PASS] Error handling with typed exceptions\n\n## Minor comments\n- order-service: consider adding request ID to all log statements\n- notification-service: email template strings could be constants\n\n## Verdict\nAPPROVED — proceed to security audit`
+  },
+  {
+    id: 'security', num: 7, label: 'Security agent', role: 'Security auditor', icon: '🔒',
+    desc: 'Automated security audit covering input validation, SQL injection, auth flaws, secret exposure, and dependencies.',
+    responsibilities: ['Input validation checks','SQL injection scanning','Auth flow audit','Secret exposure scan','Dependency CVE scan'],
+    artifacts: [{ name: 'security_audit.md', icon: '📄', size: '~9 KB' }],
+    output: `# Security audit report — v1.0.0\n\n## Scan summary\nTotal checks:     48\nPassed:           46\nWarnings:         2\nCritical issues:  0\n\n## Results\n\n[PASS] Input validation — all endpoints use class-validator pipes\n[PASS] SQL injection — ORM parameterizes all queries; no raw SQL\n[PASS] Auth — JWT verified on all protected routes; tokens expire in 1h\n[PASS] RBAC — tenant isolation enforced at middleware level\n[PASS] Secrets — no secrets in source; .env not committed (.gitignore)\n[PASS] CORS — whitelist-based origin policy\n[PASS] Rate limiting — 100 req/min per IP via Kong\n[PASS] HTTPS — TLS 1.3 enforced at gateway\n\n[WARN] Dependency: lodash@4.17.20 — upgrade to 4.17.21\n[WARN] JWT refresh token rotation not yet implemented\n\n## CVE scan\n0 critical, 0 high, 1 medium (lodash), 2 low (dev deps only)\n\n## Verdict\nAPPROVED with warnings — address in v1.1.0`
+  },
+  {
+    id: 'test', num: 8, label: 'Test agent', role: 'QA engineer', icon: '🧪',
+    desc: 'Runs unit tests, integration tests, regression tests, and acceptance validation. Max 3 fix cycles.',
+    responsibilities: ['Unit tests','Integration tests','Regression tests','Acceptance validation','Bug fix loop (max 3 cycles)'],
+    artifacts: [{ name: 'test_results.json', icon: '📋', size: '~5 KB' }],
+    output: `// test_results.json\n{\n  "run_id": "run-20250115-001",\n  "timestamp": "2025-01-15T14:22:11Z",\n  "summary": {\n    "tests_run": 52,\n    "tests_passed": 50,\n    "tests_failed": 2,\n    "skipped": 0,\n    "coverage": "88%",\n    "fix_cycles_used": 1,\n    "max_fix_cycles": 3\n  },\n  "suites": {\n    "unit": { "run": 38, "passed": 38, "failed": 0 },\n    "integration": { "run": 10, "passed": 9, "failed": 1 },\n    "e2e": { "run": 4, "passed": 3, "failed": 1 }\n  },\n  "failures": [\n    {\n      "test": "POST /api/v1/refunds/initiate — idempotency check",\n      "error": "Duplicate refund not blocked on retry",\n      "status": "fixed_in_cycle_1"\n    },\n    {\n      "test": "Notification service — SMS fallback on email failure",\n      "error": "SMS fallback timeout not handled gracefully",\n      "status": "fixed_in_cycle_1"\n    }\n  ],\n  "verdict": "PASSED"\n}`
+  },
+  {
+    id: 'performance', num: 9, label: 'Performance agent', role: 'Performance engineer', icon: '⚡',
+    desc: 'Evaluates API latency, database performance, memory consumption, and concurrency under load.',
+    responsibilities: ['API latency benchmarks','Database query analysis','Memory profiling','Concurrency testing','Bottleneck identification'],
+    artifacts: [{ name: 'performance_report.md', icon: '📄', size: '~6 KB' }],
+    output: `# Performance report — v1.0.0\n\n## Load test configuration\nTool: k6\nDuration: 10 minutes ramp + 5 min steady state\nPeak VUs: 500 concurrent users\n\n## API latency results\nPOST /api/v1/orders/create\n  p50: 48ms   p95: 132ms   p99: 187ms   PASS (< 200ms)\n\nGET /api/v1/orders/{id}/status\n  p50: 12ms   p95: 38ms    p99: 61ms    PASS\n\nPOST /api/v1/refunds/initiate\n  p50: 95ms   p95: 210ms   p99: 340ms   WARN (p99 > 300ms)\n\nGET /api/v1/analytics/dashboard\n  p50: 210ms  p95: 480ms   p99: 720ms   PASS (read-heavy, acceptable)\n\n## Database\nSlow queries detected: 1\n  analytics_events missing composite index on (tenant_id, created_at)\n  Estimated 4x query speedup after index addition\n\n## Memory\norder-service: 128MB baseline, 210MB under load — within limits\n\n## Recommendations\n1. Add Redis cache to GET /orders/{id}/status (TTL: 5s)\n2. Increase refund-service pod replicas from 2 to 4\n3. Add materialized views for analytics dashboard`
+  },
+  {
+    id: 'documentation', num: 10, label: 'Documentation agent', role: 'Technical writer', icon: '📚',
+    desc: 'Generates complete API docs, developer guides, deployment guides, and system architecture documentation.',
+    responsibilities: ['API reference docs','Developer onboarding guide','Deployment guide','Architecture docs','Runbook generation'],
+    artifacts: [
+      { name: 'documentation/api-reference.md', icon: '📄', size: '~22 KB' },
+      { name: 'documentation/developer-guide.md', icon: '📄', size: '~14 KB' },
+      { name: 'documentation/deployment-guide.md', icon: '📄', size: '~10 KB' },
+      { name: 'documentation/architecture.md', icon: '📄', size: '~12 KB' },
+    ],
+    output: `# API Reference (excerpt)\n\n## Authentication\nAll endpoints require a Bearer token in the Authorization header.\nToken expiry: 3600s. Refresh via POST /api/v1/auth/refresh.\n\n## POST /api/v1/orders/create\nCreate a new order for the authenticated tenant.\n\nRequest:\n{\n  "items": [{ "sku": "string", "qty": number, "price": number }],\n  "shipping_address": { "line1": "...", "city": "...", "zip": "..." },\n  "payment_method_id": "string"\n}\n\nResponse 201:\n{\n  "status": "success",\n  "data": {\n    "order_id": "ord_abc123",\n    "status": "pending",\n    "total": 149.99,\n    "created_at": "2025-01-15T14:30:00Z"\n  }\n}\n\nError responses follow { "status": "error", "message": "..." }\n\n## Health endpoint\nGET /health → 200 { "status": "ok", "version": "1.0.0", "uptime": 3600 }`
+  },
+  {
+    id: 'devops', num: 11, label: 'DevOps release agent', role: 'Release engineer', icon: '🚀',
+    desc: 'Creates feature branch, generates pull request, writes release notes, and triggers the CI/CD pipeline.',
+    responsibilities: ['Create feature branch','Generate pull request','Write release notes','Trigger CI/CD pipeline','Generate deployment config'],
+    artifacts: [
+      { name: 'release_notes.md', icon: '📄', size: '~3 KB' },
+      { name: 'pull_request', icon: '🔀', size: '—' },
+      { name: 'deployment_config/', icon: '📁', size: '~8 KB' },
+    ],
+    output: `# Release notes — v1.0.0\n\n## Order Management Platform — Initial Release\n\n### New features\n- Multi-tenant order creation with real-time status tracking\n- Automated refund processing with idempotency guarantees\n- Fraud scoring integration (synchronous, < 50ms p99)\n- Live dashboard via WebSocket with per-tenant isolation\n- Automated daily finance reconciliation exports\n\n### Technical highlights\n- 6 microservices deployed on Kubernetes (EKS)\n- API Gateway with rate limiting and JWT auth\n- 88% test coverage across 52 test cases\n- 0 critical security issues at launch\n- p99 order creation: 187ms\n\n### CI/CD\nBranch:  feature/order-platform-v1.0.0\nPR:      #142 — ready for merge to main\nPipeline: GitHub Actions → ECR → EKS (blue/green deploy)\nRollback: automated on health check failure\n\n### Deployment\nkubectl apply -f deployment_config/\nEstimated deploy time: ~8 minutes (rolling update)\nHealth check: GET /health on all pods before traffic shift`
+  }
+];
+
+const DEFAULT_ORCHESTRATOR_ROLE = `You are an expert product architect and requirement generator.
+
+OBJECTIVE
+Generate structured requirements strictly from provided input.
+
+CONSTRAINTS
+- Never hallucinate
+- Never assume missing data
+- Ask clarification if data missing
+- Only output in defined JSON format
+- Follow modular architecture principles
+- Prefer API-first design
+
+PROCESS
+1. Validate input
+2. Identify missing information
+3. Generate structured output
+
+OUTPUT FORMAT
+<strict schema>`;
+
+let orchestratorRole = DEFAULT_ORCHESTRATOR_ROLE;
+
+let agentStates = {};
+let currentView = 'home';
+let pipelineRunning = false;
+let activeTab = {};
+let gateFeedback = {};
+
+function getOrchestratorRole() {
+  const el = document.getElementById('roleTextarea');
+  if (el && el.value.trim()) return el.value.trim();
+  return orchestratorRole;
+}
+
+function initStates(fullReset) {
+  AGENTS.forEach(function(a) {
+    agentStates[a.id] = 'idle';
+    if (fullReset && ['product','design','architecture','development','orchestrator',
+         'review','security','test','performance','documentation','devops'].indexOf(a.id) >= 0) {
+      a.output = '';
+      a._cachedPrototype = null;
+    }
+  });
+}
+
+function renderPipeline() {
+  const list = document.getElementById('pipelineList');
+  list.innerHTML = '';
+  AGENTS.forEach((agent, i) => {
+    if (i > 0) {
+      const conn = document.createElement('div');
+      conn.className = 'connector';
+      list.appendChild(conn);
+    }
+    const item = document.createElement('div');
+    const state = agentStates[agent.id] || 'idle';
+    item.className = `agent-item ${state} ${agent.isGate ? 'gate' : ''} ${currentView === agent.id ? 'active' : ''}`;
+    item.onclick = () => showAgent(agent.id);
+
+    const numEl = document.createElement('div');
+    numEl.className = 'agent-num';
+    numEl.textContent = state === 'complete' ? '✓' : state === 'error' ? '✗' : agent.num;
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'agent-label';
+    labelEl.innerHTML = `<strong>${agent.label}</strong><span>${agent.role}</span>`;
+
+    const dot = document.createElement('div');
+    dot.className = 'status-dot';
+
+    item.appendChild(numEl);
+    item.appendChild(labelEl);
+    item.appendChild(dot);
+    list.appendChild(item);
+  });
+}
+
+function renderHome() {
+  document.getElementById('homeView').style.display = 'block';
+  document.getElementById('agentView').style.display = 'none';
+  currentView = 'home';
+  document.getElementById('topTitle').textContent = 'AI Software Factory Orchestrator';
+  document.getElementById('topSub').textContent = 'Define a business requirement and run the full engineering pipeline';
+  renderPipeline();
+  const stages = document.getElementById('stageList');
+  stages.innerHTML = AGENTS.map(a => `<div>${a.isGate ? '⛩ ' : a.num + '. '}${a.label}</div>`).join('');
+}
+
+function showAgent(agentId) {
+  const agent = AGENTS.find(a => a.id === agentId);
+  if (!agent) return;
+
+  // Persist any unsaved feedback textarea content before wiping innerHTML
+  AGENTS.forEach(function(a) {
+    var ta = document.getElementById('agent-fb-' + a.id);
+    if (ta && ta.value.trim()) gateFeedback[a.id] = ta.value.trim();
+  });
+
+  currentView = agentId;
+  document.getElementById('homeView').style.display = 'none';
+  const view = document.getElementById('agentView');
+  view.style.display = 'block';
+  view.classList.add('visible');
+  document.getElementById('topTitle').textContent = agent.label;
+  document.getElementById('topSub').textContent = agent.role;
+
+  const state = agentStates[agentId] || 'idle';
+  const badgeLabel = { idle: 'Idle', running: 'Running...', complete: 'Complete', error: 'Error', waiting: 'Waiting for approval' }[state] || 'Idle';
+
+  let html = `<div class="agent-header"><div class="agent-icon">${agent.icon}</div><div class="agent-meta"><h2>${agent.label}</h2><p>${agent.desc}</p><span class="badge ${state}">${badgeLabel}</span></div></div>`;
+
+  if (agent.isGate) {
+    const preGateAgents = AGENTS.filter((a, i) => !a.isGate && i < AGENTS.findIndex(x => x.isGate) && agentStates[a.id] === 'complete');
+
+    const feedbackRowsHtml = preGateAgents.map(a => {
+      const saved = gateFeedback[a.id] || '';
+      const hasSaved = saved.trim().length > 0;
+      return '<div class="feedback-row" id="frow-' + a.id + '">' +
+        '<div class="feedback-row-header" onclick="toggleFeedbackRow(\'' + a.id + '\')">' +
+          '<div class="feedback-row-title">' +
+            '<span class="frt-icon">' + a.icon + '</span>' +
+            '<span class="frt-name">' + a.label + '</span>' +
+            '<span class="frt-role">' + a.role + '</span>' +
+            '<span class="frt-has-input" id="fhas-' + a.id + '" style="' + (hasSaved ? 'display:inline-flex' : '') + '">feedback added</span>' +
+          '</div>' +
+          '<div class="feedback-chevron" id="fchev-' + a.id + '">&#9660;</div>' +
+        '</div>' +
+        '<div class="feedback-row-body" id="fbody-' + a.id + '">' +
+          '<label>Revision instructions for this agent</label>' +
+          '<textarea id="finput-' + a.id + '" placeholder="e.g. Add a mobile app persona, focus on B2B use cases..." oninput="onFeedbackInput(\'' + a.id + '\')">' + saved + '</textarea>' +
+          '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<button class="gate-btn revise-apply" onclick="saveFeedback(\'' + a.id + '\')">Save to memory</button>' +
+            '<span class="feedback-saved-tag" id="fsaved-tag-' + a.id + '" style="' + (hasSaved ? 'display:inline-flex' : '') + '">&#10003; Saved</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    const memEntries = loadMemory();
+    const memHtml = memEntries.length === 0
+      ? '<div class="empty-memory">No feedback stored yet. Add revision notes above to build orchestrator memory.</div>'
+      : memEntries.slice().reverse().map(e =>
+          '<div class="memory-entry">' +
+            '<div class="memory-entry-top">' +
+              '<span class="mem-agent-badge">' + e.agentLabel + '</span>' +
+              (e.applied ? '<span class="mem-applied-badge">&#10003; Applied</span>' : '') +
+              '<span class="mem-time">' + e.time + '</span>' +
+            '</div>' +
+            '<div class="mem-feedback">&ldquo;' + e.feedback + '&rdquo;</div>' +
+            '<div class="mem-learning">' + e.learning + '</div>' +
+          '</div>').join('');
+
+    html +=
+      '<div class="gate-panel">' +
+        '<h3>Human approval gate</h3>' +
+        '<p>Review outputs from each agent. Add revision feedback below — the orchestrator will regenerate affected agent outputs using Claude API before the pipeline continues. All feedback is stored in memory for future runs.</p>' +
+        '<div class="gate-actions">' +
+          '<button class="gate-btn approve" id="gateApproveBtn" onclick="approveGate()">Approve &amp; continue pipeline</button>' +
+          '<button class="gate-btn revise-apply" id="gateReviseBtn" onclick="applyAllRevisions()">Apply revisions &amp; regenerate</button>' +
+          '<button class="gate-btn reject" onclick="rejectGate()">Reject pipeline</button>' +
+        '</div>' +
+      '</div>' +
+
+      '<p class="feedback-section-title">Revision feedback per agent</p>' +
+      '<div class="feedback-grid">' + (feedbackRowsHtml || '<div class="empty-state">Run the pipeline first to see agents here.</div>') + '</div>' +
+
+      '<div class="memory-panel">' +
+        '<div class="memory-panel-header">' +
+          '<h3>Orchestrator memory</h3>' +
+          '<span class="memory-count">' + memEntries.length + ' entries</span>' +
+        '</div>' +
+        '<div class="memory-list" id="memoryList">' + memHtml + '</div>' +
+      '</div>' +
+
+      '<div class="section-card">' +
+        '<h3>Architecture artifacts</h3>' +
+        '<div class="artifact-list">' +
+          '<div class="artifact-item"><span class="file-icon">&#128196;</span><strong>architecture_design.md</strong><small>~15 KB</small></div>' +
+          '<div class="artifact-item"><span class="file-icon">&#128203;</span><strong>api_contracts.yaml</strong><small>~10 KB</small></div>' +
+          '<div class="artifact-item"><span class="file-icon">&#128444;</span><strong>system_architecture_diagram</strong><small>~4 KB</small></div>' +
+        '</div>' +
+      '</div>';
+
+  } else {
+    var tabId = agentId;
+    if (!activeTab[tabId]) activeTab[tabId] = 'overview';
+    var isIdle = (state === 'idle' || state === 'waiting');
+
+    var fbDot = gateFeedback[tabId] ? ' <span class="tab-feedback-dot"></span>' : '';
+    html += '<div class="tabs">' +
+      '<div class="tab ' + (activeTab[tabId]==='overview' ? 'active' : '') + '" onclick="switchTab(\'' + tabId + '\',\'overview\',this)">Overview</div>' +
+      '<div class="tab ' + (activeTab[tabId]==='output' ? 'active' : '') + '" onclick="switchTab(\'' + tabId + '\',\'output\',this)">Output</div>' +
+      '<div class="tab ' + (activeTab[tabId]==='artifacts' ? 'active' : '') + '" onclick="switchTab(\'' + tabId + '\',\'artifacts\',this)">Artifacts</div>' +
+      '<div class="tab ' + (activeTab[tabId]==='feedback' ? 'active' : '') + '" onclick="switchTab(\'' + tabId + '\',\'feedback\',this)">Feedback' + fbDot + '</div>' +
+      '</div>';
+
+    var respRows = (agent.responsibilities||[]).map(function(r){ return '<div class="resp-item"><div class="resp-dot"></div>' + r + '</div>'; }).join('');
+
+    html += '<div class="tab-content ' + (activeTab[tabId]==='overview' ? 'active' : '') + '" id="tab-overview-' + tabId + '"><div class="section-card"><h3>Responsibilities</h3><div class="responsibilities">' + respRows + '</div></div></div>';
+
+    var outBody = isIdle ? '<div class="empty-state">Agent has not run yet.<p>Start the pipeline to generate output.</p></div>' : '<div class="output-block">' + agent.output + '</div>';
+    html += '<div class="tab-content ' + (activeTab[tabId]==='output' ? 'active' : '') + '" id="tab-output-' + tabId + '">' + outBody + '</div>';
+
+    var artHtml = '';
+    if (isIdle) {
+      artHtml = '<div class="empty-state">Agent has not run yet.<p>Start the pipeline to generate artifacts.</p></div>';
+    } else if (agent.artifacts && agent.artifacts.length) {
+      var artRows = '';
+      for (var ai = 0; ai < agent.artifacts.length; ai++) {
+        var a = agent.artifacts[ai];
+        var aN = a.name.replace(/'/g, "\\'");
+        var actionBtns = '';
+        var actionBtns = '';
+        if (a.isHtml) {
+          actionBtns = buildArtifactButtons(tabId, aN, true);
+        } else {
+          actionBtns = buildArtifactButtons(tabId, aN, false);
+        }
+        artRows += '<div class="artifact-item">' +
+          '<span class="file-icon">' + a.icon + '</span>' +
+          '<div style="flex:1;min-width:0;"><strong>' + a.name + '</strong>' +
+          (a.isHtml ? '<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:1px;">Interactive HTML preview</div>' : '') +
+          '</div>' +
+          '<small>' + a.size + '</small>' +
+          '<div class="artifact-actions">' + actionBtns + '</div>' +
+          '</div>';
+      }
+      artHtml = '<div class="section-card"><h3>Generated artifacts</h3><div class="artifact-list">' + artRows + '</div></div>';
+    } else {
+      artHtml = '<div class="empty-state">No artifacts for this agent.</div>';
+    }
+    html += '<div class="tab-content ' + (activeTab[tabId]==='artifacts' ? 'active' : '') + '" id="tab-artifacts-' + tabId + '">' + artHtml + '</div>';
+
+    var savedFb = gateFeedback[tabId] || '';
+    var memItems = loadMemory().filter(function(e){ return e.agentId === tabId; });
+    var memRowsHtml = '';
+    for (var mi = memItems.length - 1; mi >= 0; mi--) {
+      var me = memItems[mi];
+      var mBadge = me.applied ?
+        '<span style="font-size:11px;color:#3B6D11;background:#EAF3DE;border:0.5px solid #97C459;padding:2px 7px;border-radius:100px;">Applied</span>' :
+        '<span style="font-size:11px;color:#854F0B;background:#FAEEDA;border:0.5px solid #EF9F27;padding:2px 7px;border-radius:100px;">Pending</span>';
+      memRowsHtml += '<div style="padding:8px 10px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);margin-bottom:6px;">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' + mBadge +
+        '<span style="font-size:11px;color:var(--color-text-tertiary);margin-left:auto;">' + me.time + '</span></div>' +
+        '<div style="font-size:12px;color:var(--color-text-primary);line-height:1.5;margin-bottom:3px;">' + me.feedback + '</div>' +
+        '<div style="font-size:11px;color:var(--color-text-tertiary);font-style:italic;">' + me.learning + '</div>' +
+        '</div>';
+    }
+    var memSection = memItems.length > 0 ?
+      '<div class="section-card" style="margin-top:12px;"><h3>Memory for this agent (' + memItems.length + ')</h3>' + memRowsHtml + '</div>' :
+      '<p style="text-align:center;padding:20px;font-size:13px;color:var(--color-text-tertiary);">No feedback saved for this agent yet.</p>';
+
+    html += '<div class="tab-content ' + (activeTab[tabId]==='feedback' ? 'active' : '') + '" id="tab-feedback-' + tabId + '">' +
+      '<div class="section-card">' +
+        '<h3>Revision feedback</h3>' +
+        '<p style="font-size:13px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.5;">Enter revision instructions for this agent. Feedback is saved to orchestrator memory and applied when you run the gate revisions.</p>' +
+        '<textarea id="agent-fb-' + tabId + '" style="width:100%;min-height:90px;padding:9px 11px;border:0.5px solid var(--color-border-secondary);border-radius:8px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px;font-family:var(--font-sans);resize:vertical;line-height:1.5;" placeholder="e.g. Add a mobile app persona. Focus on B2B enterprise use cases...">' + savedFb + '</textarea>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+          '<button class="gate-btn revise-apply" onclick="saveAgentFeedback(\'' + tabId + '\')">Save feedback</button>' +
+          '<span id="agent-fb-saved-' + tabId + '" style="display:none;font-size:11px;color:#3B6D11;background:#EAF3DE;border:0.5px solid #97C459;padding:3px 8px;border-radius:100px;">&#10003; Saved</span>' +
+        '</div>' +
+      '</div>' +
+      memSection +
+      '</div>';
+  }
+
+  // ── Sticky fix & rerun bar (always visible for complete agents) ────────────
+  if (!agent.isGate) {
+    var isComplete = (state === 'complete');
+    if (isComplete) {
+      var continueVisible = (agentFixReady && agentFixReady === tabId) ? 'flex' : 'none';
+      html += buildFixBar(tabId, continueVisible);
+    }
+  }
+
+  view.innerHTML = html;
+
+  // Wire fix-bar buttons via event delegation (avoids onclick quote nesting)
+  var fixBtn = view.querySelector('[data-fixagent]');
+  if (fixBtn) {
+    fixBtn.addEventListener('click', function() {
+      fixAndRerun(this.getAttribute('data-fixagent'));
+    });
+  }
+  var contBtn = view.querySelector('[data-continueagent]');
+  if (contBtn) {
+    contBtn.addEventListener('click', function() {
+      continueFromAgent(this.getAttribute('data-continueagent'));
+    });
+  }
+
+  renderPipeline();
+}
+
+
+function escAttr(s) {
+  var d = document.createElement('div');
+  d.setAttribute('data-v', String(s));
+  return d.getAttribute('data-v').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function escHtml(s) {
+  var d = document.createElement('div');
+  d.appendChild(document.createTextNode(String(s)));
+  return d.innerHTML;
+}
+
+var ARTIFACT_CONTENT = {
+  product: {
+    'product_prd.md': function(agent) { return agent.output || '# Product Requirement Document\n\n(Run the pipeline to generate)'; }
+  },
+  design: {
+    'design-system/colors.json': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Color tokens', ['Typography', 'Spacing', 'Component', 'Layout', 'Design decision']);
+      if (!sec) return JSON.stringify({primary:{"50":"#E6F1FB","500":"#185FA5","900":"#042C53"},success:{"50":"#EAF3DE","500":"#3B6D11"},danger:{"50":"#FCEBEB","500":"#A32D2D"},warning:{"50":"#FAEEDA","500":"#854F0B"},neutral:{"50":"#F1EFE8","500":"#5F5E5A"}},null,2);
+      return '// Extracted from Design Agent output\n// Run pipeline to get generated colors\n\n' + sec.trim();
+    },
+    'design-system/typography.json': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Typography', ['Spacing', 'Component', 'Layout', 'Design decision', 'Color']);
+      if (!sec) return JSON.stringify({fontFamily:{sans:"system-ui, sans-serif",mono:"monospace"},scale:{xs:"11px",sm:"13px",base:"15px",lg:"18px",xl:"22px","2xl":"28px"},weight:{regular:400,medium:500}},null,2);
+      return '// Extracted from Design Agent output\n\n' + sec.trim();
+    },
+    'design-system/spacing.json': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Spacing', ['Component', 'Layout', 'Design decision', 'Typography', 'Color']);
+      if (!sec) return JSON.stringify({"1":"4px","2":"8px","3":"12px","4":"16px","5":"20px","6":"24px","8":"32px","10":"40px"},null,2);
+      return '// Extracted from Design Agent output\n\n' + sec.trim();
+    },
+    'design-system/components/': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Component', ['Layout', 'Design decision', 'Spacing', 'Typography']);
+      if (!sec) return '// Run pipeline to generate component inventory';
+      return '// Component inventory — extracted from Design Agent output\n\n' + sec.trim();
+    },
+    'layout-guidelines.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Layout', ['Design decision', 'Component', 'Spacing', 'Typography']);
+      if (!sec) return '// Run pipeline to generate layout guidelines';
+      return '# Layout guidelines\n// Extracted from Design Agent output\n\n' + sec.trim();
+    },
+    'design-system-viewer.html': function(agent) {
+      var out = agent.output || '';
+      if (!out || out.length < 100) {
+        return generatePlaceholderHtml('Design System Viewer', 'Run the pipeline first to generate the design system from your PRD.');
+      }
+      return generateDesignViewerHtml(out);
+    },
+    'design-prototype.html': function(agent) {
+      var out = agent.output || '';
+      if (!out || out.length < 100) {
+        return generatePlaceholderHtml('Design Prototype', 'Run the pipeline first to generate the prototype from your PRD and design system.');
+      }
+      // Prototype is generated async — caller (previewArtifact) handles this
+      return '__ASYNC_PROTOTYPE__';
+    }
+  },
+  architecture: {
+    'architecture_design.md': function(agent) {
+      return agent.output || '# Architecture Design\n\n(Run the pipeline to generate)';
+    },
+    'api_contracts.yaml': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'API contracts', ['Database', 'Service bound', 'Architecture decision', 'System module']);
+      if (!sec) return '# API Contracts\n# Run the pipeline to generate';
+      return '# API Contracts — extracted from Architecture Agent output\n# ' + new Date().toISOString().split('T')[0] + '\n\nopenapi: "3.0.0"\n\n' + sec.trim();
+    },
+    'system_architecture_diagram': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Service bound', ['Architecture decision', 'API contract', 'Database', 'System module']);
+      if (!sec) sec = extractSection(out, 'System module', ['API contract', 'Database', 'Service bound', 'Architecture decision']);
+      if (!sec) return '# System Architecture Diagram\n# Run the pipeline to generate';
+      return '# System Architecture — extracted from Architecture Agent output\n\n' + sec.trim();
+    }
+  },
+  development: {
+    'modules/order-service/': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Service module', ['Core implementation', 'API endpoint', 'Test stub', 'Implementation decision']);
+      if (!sec) sec = extractSection(out, 'Core implementation', ['API endpoint', 'Test stub', 'Implementation decision', 'Service module']);
+      return sec || out || '# Run pipeline to generate';
+    },
+    'api-contracts.yaml': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'API endpoint', ['Test stub', 'Implementation decision', 'Service module', 'Core implementation']);
+      return '# API Endpoints — Development Agent\n\n' + (sec || out || '# Run pipeline to generate');
+    },
+    'test-stubs.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Test stub', ['Implementation decision', 'Service module', 'Core implementation', 'API endpoint']);
+      return sec || '# Test stubs\n# Run pipeline to generate';
+    },
+    'implementation-decisions.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Implementation decision', ['Service module', 'Core implementation', 'API endpoint', 'Test stub']);
+      return sec || out || '# Implementation decisions\n# Run pipeline to generate';
+    }
+  },
+  orchestrator: {
+    'service_registry.json': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Service registry', ['Dependency graph', 'Coupling', 'Communication', 'Orchestration']);
+      return sec || out || '# Service Registry\n# Run pipeline to generate';
+    },
+    'service_dependency_graph.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Dependency graph', ['Coupling', 'Communication', 'Orchestration', 'Service registry']);
+      if (!sec) sec = extractSection(out, 'Communication', ['Orchestration', 'Service registry', 'Dependency graph', 'Coupling']);
+      return sec || out || '# Dependency Graph\n# Run pipeline to generate';
+    }
+  },
+  review: {
+    'review_report.md': function(agent) { return agent.output || '# Code Review Report\n# Run pipeline to generate'; }
+  },
+  security: {
+    'security_audit.md': function(agent) { return agent.output || '# Security Audit\n# Run pipeline to generate'; }
+  },
+  test: {
+    'test_results.json': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Test summary', ['Unit test', 'Integration', 'Acceptance', 'Failure', 'Coverage']);
+      return sec || out || '# Test Results\n# Run pipeline to generate';
+    },
+    'coverage_report.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Coverage', ['Test summary', 'Unit test', 'Integration', 'Acceptance', 'Failure']);
+      return sec || out || '# Coverage Report\n# Run pipeline to generate';
+    }
+  },
+  performance: {
+    'performance_report.md': function(agent) { return agent.output || '# Performance Report\n# Run pipeline to generate'; },
+    'load_test_config.yaml': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Load test', ['API latency', 'Database', 'Memory', 'Bottleneck', 'Performance decision']);
+      return sec || '# Load Test Config\n# Run pipeline to generate';
+    }
+  },
+  documentation: {
+    'documentation/api-reference.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'API reference', ['Developer', 'Architecture overview', 'Deployment', 'Runbook']);
+      return sec || out || '# API Reference\n# Run pipeline to generate';
+    },
+    'documentation/developer-guide.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Developer', ['API reference', 'Architecture overview', 'Deployment', 'Runbook']);
+      return sec || out || '# Developer Guide\n# Run pipeline to generate';
+    },
+    'documentation/deployment-guide.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Deployment', ['API reference', 'Developer', 'Architecture overview', 'Runbook']);
+      return sec || out || '# Deployment Guide\n# Run pipeline to generate';
+    },
+    'documentation/runbook.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Runbook', ['API reference', 'Developer', 'Architecture overview', 'Deployment']);
+      return sec || out || '# Runbook\n# Run pipeline to generate';
+    }
+  },
+  devops: {
+    'release_notes.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Release note', ['Pull request', 'CI/CD', 'Deployment checklist', 'Rollback']);
+      return sec || out || '# Release Notes\n# Run pipeline to generate';
+    },
+    'pull_request': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Pull request', ['Release note', 'CI/CD', 'Deployment checklist', 'Rollback']);
+      return sec || out || '# Pull Request\n# Run pipeline to generate';
+    },
+    'ci-cd-pipeline.yml': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'CI/CD', ['Release note', 'Pull request', 'Deployment checklist', 'Rollback']);
+      return sec || out || '# CI/CD Pipeline\n# Run pipeline to generate';
+    },
+    'deployment_checklist.md': function(agent) {
+      var out = agent.output || '';
+      var sec = extractSection(out, 'Deployment checklist', ['Release note', 'Pull request', 'CI/CD', 'Rollback']);
+      return sec || out || '# Deployment Checklist\n# Run pipeline to generate';
+    }
+  }
+};
+
+// ── Helper: extract a named section from agent markdown output ────────────────
+function extractSection(text, headingKeyword, stopKeywords) {
+  if (!text) return '';
+  var lines = text.split('\n');
+  var start = -1;
+  var result = [];
+  var kw = headingKeyword.toLowerCase();
+  for (var i = 0; i < lines.length; i++) {
+    var l = lines[i];
+    if (start === -1) {
+      if (l.match(/^#{1,4}\s/) && l.toLowerCase().includes(kw)) { start = i + 1; }
+      continue;
+    }
+    // Check stop
+    var isStop = false;
+    if (l.match(/^#{1,4}\s/)) {
+      var lt = l.toLowerCase();
+      for (var s = 0; s < stopKeywords.length; s++) {
+        if (lt.includes(stopKeywords[s].toLowerCase())) { isStop = true; break; }
+      }
+      if (!isStop && l.match(/^#{1,3}\s/)) { isStop = true; } // any sibling heading
+    }
+    if (isStop) break;
+    result.push(l);
+  }
+  return result.join('\n').trim();
+}
+
+// ── Generate design system viewer HTML from agent output ─────────────────────
+function generateDesignViewerHtml(agentOutput) {
+  var colors = extractSection(agentOutput, 'Color tokens', ['Typography','Spacing','Component','Layout','Design decision']) || '(see output tab)';
+  var typography = extractSection(agentOutput, 'Typography', ['Spacing','Component','Layout','Design decision','Color']) || '(see output tab)';
+  var spacing = extractSection(agentOutput, 'Spacing', ['Component','Layout','Design decision','Typography','Color']) || '(see output tab)';
+  var components = extractSection(agentOutput, 'Component', ['Layout','Design decision','Spacing','Typography']) || '(see output tab)';
+  var layouts = extractSection(agentOutput, 'Layout', ['Design decision','Component','Spacing','Typography']) || '(see output tab)';
+  var decisions = extractSection(agentOutput, 'Design decision', ['Component','Layout','Spacing','Typography','Color']) || '(see output tab)';
+
+  function esc(s) { var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Design System Viewer</title>' +
+  '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;background:#f5f5f3;color:#1a1a18;display:grid;grid-template-columns:200px 1fr;height:100vh}' +
+  'nav{background:#1a1a18;padding:16px 0;overflow-y:auto}nav h1{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:#5f5e5a;padding:0 14px 10px}' +
+  'nav a{display:block;padding:7px 14px;font-size:13px;color:#b4b2a9;text-decoration:none;cursor:pointer}nav a:hover,nav a.active{background:#2a2a28;color:#f0efe9}' +
+  'main{overflow-y:auto;padding:28px}section{display:none}section.active{display:block}h2{font-size:20px;font-weight:500;margin-bottom:6px}' +
+  '.sub{font-size:13px;color:#5f5e5a;margin-bottom:20px}.card{background:#fff;border:0.5px solid rgba(0,0,0,.1);border-radius:10px;padding:18px;margin-bottom:14px}' +
+  '.card h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#5f5e5a;margin-bottom:12px}' +
+  'pre{background:#1a1a18;color:#b4b2a9;font-size:12px;line-height:1.65;padding:14px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}' +
+  '</style></head><body>' +
+  '<nav><h1>Design System</h1>' +
+  '<a class="active" onclick="show(\'colors\',this)">🎨 Colors</a>' +
+  '<a onclick="show(\'typography\',this)">📝 Typography</a>' +
+  '<a onclick="show(\'spacing\',this)">📐 Spacing</a>' +
+  '<a onclick="show(\'components\',this)">🧩 Components</a>' +
+  '<a onclick="show(\'layouts\',this)">🗂 Layouts</a>' +
+  '<a onclick="show(\'decisions\',this)">📋 Decisions</a>' +
+  '</nav><main>' +
+  '<section id="colors" class="active"><h2>Color tokens</h2><p class="sub">Semantic color palette defined in the design system.</p>' +
+  '<div class="card"><h3>Color scale</h3><pre>' + esc(colors) + '</pre></div></section>' +
+  '<section id="typography"><h2>Typography</h2><p class="sub">Type scale, weights, and line heights.</p>' +
+  '<div class="card"><h3>Type scale</h3><pre>' + esc(typography) + '</pre></div></section>' +
+  '<section id="spacing"><h2>Spacing</h2><p class="sub">Grid-based spacing tokens.</p>' +
+  '<div class="card"><h3>Spacing scale</h3><pre>' + esc(spacing) + '</pre></div></section>' +
+  '<section id="components"><h2>Component inventory</h2><p class="sub">All UI components mapped to PRD features.</p>' +
+  '<div class="card"><h3>Components</h3><pre>' + esc(components) + '</pre></div></section>' +
+  '<section id="layouts"><h2>Layout patterns</h2><p class="sub">Named layout templates mapped to user stories.</p>' +
+  '<div class="card"><h3>Layouts</h3><pre>' + esc(layouts) + '</pre></div></section>' +
+  '<section id="decisions"><h2>Design decisions log</h2><p class="sub">Key decisions and their PRD traceability.</p>' +
+  '<div class="card"><h3>Decisions</h3><pre>' + esc(decisions) + '</pre></div></section>' +
+  '</main>' +
+  '<script>function show(id,el){document.querySelectorAll("section").forEach(function(s){s.classList.remove("active");});document.querySelectorAll("nav a").forEach(function(a){a.classList.remove("active");});document.getElementById(id).classList.add("active");el.classList.add("active");}' +
+  '<\/script></body></html>';
+}
+
+// ── Generate placeholder HTML ─────────────────────────────────────────────────
+function generatePlaceholderHtml(title, message) {
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + title + '</title>' +
+  '<style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#f5f5f3;color:#5f5e5a;text-align:center}' +
+  '.box{padding:40px;background:#fff;border-radius:12px;border:0.5px solid rgba(0,0,0,.1);max-width:400px}' +
+  'h2{font-size:18px;font-weight:500;color:#1a1a18;margin-bottom:10px}.icon{font-size:48px;margin-bottom:16px}</style></head>' +
+  '<body><div class="box"><div class="icon">⏳</div><h2>' + title + '</h2><p>' + message + '</p></div></body></html>';
+}
+
+// ── Generate prototype HTML via Claude API ────────────────────────────────────
+async function generatePrototypeHtml(agentOutput) {
+  var productAgent = AGENTS.find(function(a) { return a.id === 'product'; });
+  var prd = productAgent ? productAgent.output : '';
+  var role = getOrchestratorRole();
+
+  var systemPrompt = buildSystemPrompt(role) +
+    '---\nAGENT ROLE: Design Prototype Generator\n' +
+    'TASK: Generate a complete, self-contained single-file HTML prototype of the product described in the PRD and design system below.\n\n' +
+    'REQUIREMENTS:\n' +
+    '- Use ONLY the features, screens, and entities named in the PRD — no generic placeholders\n' +
+    '- Build 4-6 interactive screens/views navigable from a sidebar and top nav\n' +
+    '- Each screen must correspond to a specific PRD user story or feature\n' +
+    '- Use the color tokens, typography scale, and component names from the design system output\n' +
+    '- All navigation must work (JS-driven show/hide)\n' +
+    '- Include realistic sample data derived from the product domain (not generic "Lorem ipsum")\n' +
+    '- Single HTML file: no external dependencies\n\n' +
+    'OUTPUT: Return ONLY the complete HTML file starting with <!DOCTYPE html>. No explanation, no markdown fences.';
+
+  var userPrompt = 'PRD:\n' + prd + '\n\nDesign System:\n' + agentOutput;
+
+  var html = '';
+  await callClaudeAPI(systemPrompt, userPrompt, function(partial) { html = partial; });
+  return html;
+}
+
+// ── Artifact functions ────────────────────────────────────────────────────────
+function buildArtifactButtons(agentId, artifactName, isHtml) {
+  var wrap = document.createElement('div');
+  wrap.className = 'artifact-actions';
+
+  if (isHtml) {
+    var bPrev = document.createElement('button');
+    bPrev.className = 'artifact-btn';
+    bPrev.style.cssText = 'background:#185FA5;color:white;border-color:#185FA5;';
+    bPrev.textContent = '▶ Preview';
+    bPrev.setAttribute('data-agent', agentId);
+    bPrev.setAttribute('data-name', artifactName);
+    bPrev.setAttribute('data-action', 'preview');
+
+    var bSrc = document.createElement('button');
+    bSrc.className = 'artifact-btn';
+    bSrc.textContent = 'Source';
+    bSrc.setAttribute('data-agent', agentId);
+    bSrc.setAttribute('data-name', artifactName);
+    bSrc.setAttribute('data-action', 'view');
+
+    var bDl = document.createElement('button');
+    bDl.className = 'artifact-btn';
+    bDl.textContent = 'Download';
+    bDl.setAttribute('data-agent', agentId);
+    bDl.setAttribute('data-name', artifactName);
+    bDl.setAttribute('data-action', 'download');
+
+    wrap.appendChild(bPrev);
+    wrap.appendChild(bSrc);
+    wrap.appendChild(bDl);
+  } else {
+    var bV = document.createElement('button');
+    bV.className = 'artifact-btn';
+    bV.textContent = 'View';
+    bV.setAttribute('data-agent', agentId);
+    bV.setAttribute('data-name', artifactName);
+    bV.setAttribute('data-action', 'view');
+
+    var bC = document.createElement('button');
+    bC.className = 'artifact-btn';
+    bC.textContent = 'Copy';
+    bC.setAttribute('data-agent', agentId);
+    bC.setAttribute('data-name', artifactName);
+    bC.setAttribute('data-action', 'copy');
+
+    var bD = document.createElement('button');
+    bD.className = 'artifact-btn primary';
+    bD.textContent = 'Download';
+    bD.setAttribute('data-agent', agentId);
+    bD.setAttribute('data-name', artifactName);
+    bD.setAttribute('data-action', 'download');
+
+    wrap.appendChild(bV);
+    wrap.appendChild(bC);
+    wrap.appendChild(bD);
+  }
+  return wrap.outerHTML;
+}
+
+async function previewArtifact(agentId, artifactName) {
+  var agent = AGENTS.find(function(a) { return a.id === agentId; });
+  var existing = document.getElementById('artifactViewerOverlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'artifactViewerOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;width:100%;max-width:1100px;height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.3);';
+
+  var header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:0.5px solid rgba(0,0,0,0.1);background:#f5f5f3;flex-shrink:0;';
+
+  var titleWrap = document.createElement('div');
+  titleWrap.style.cssText = 'display:flex;align-items:center;gap:10px;';
+  var titleIcon = document.createElement('span');
+  titleIcon.textContent = '👁 Preview —';
+  titleIcon.style.cssText = 'font-size:13px;color:#888780;';
+  var titleText = document.createElement('strong');
+  titleText.textContent = artifactName;
+  titleText.style.cssText = 'font-size:13px;color:#1a1a18;';
+  var genBadge = document.createElement('span');
+  genBadge.id = 'previewGenBadge';
+  genBadge.style.cssText = 'font-size:11px;color:#854F0B;background:#FAEEDA;border:0.5px solid #EF9F27;padding:2px 8px;border-radius:100px;display:none;';
+  genBadge.textContent = '⏳ Generating...';
+  titleWrap.appendChild(titleIcon);
+  titleWrap.appendChild(titleText);
+  titleWrap.appendChild(genBadge);
+
+  var actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;gap:8px;align-items:center;';
+
+  var btnDl = document.createElement('button');
+  btnDl.textContent = 'Download';
+  btnDl.style.cssText = 'padding:5px 12px;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;border:0.5px solid rgba(0,0,0,.22);background:#fff;font-family:inherit;';
+  btnDl.onclick = function(){ downloadArtifact(agentId, artifactName); };
+
+  var btnClose = document.createElement('button');
+  btnClose.textContent = '✕';
+  btnClose.style.cssText = 'width:28px;height:28px;border-radius:7px;border:0.5px solid rgba(0,0,0,.18);background:#fff;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;font-family:inherit;';
+  btnClose.onclick = function(){ overlay.remove(); };
+
+  actions.appendChild(btnDl);
+  actions.appendChild(btnClose);
+  header.appendChild(titleWrap);
+  header.appendChild(actions);
+
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'flex:1;border:none;width:100%;background:#fff;';
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+  iframe.setAttribute('title', artifactName);
+
+  box.appendChild(header);
+  box.appendChild(iframe);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Get content — potentially async for prototype
+  var cnt = getArtifactContent(agentId, artifactName, agent ? agent.output : '');
+
+  if (cnt === '__ASYNC_PROTOTYPE__') {
+    // Show loading state in iframe
+    genBadge.style.display = 'inline-flex';
+    var loadDoc = iframe.contentDocument || iframe.contentWindow.document;
+    loadDoc.open();
+    loadDoc.write(generatePlaceholderHtml('Generating prototype...', 'Claude is building a working prototype from your PRD and design system. This may take 15–30 seconds.'));
+    loadDoc.close();
+
+    try {
+      cnt = await generatePrototypeHtml(agent ? agent.output : '');
+      // Cache so download works too
+      if (agent) agent._cachedPrototype = cnt;
+      genBadge.textContent = '✓ Generated';
+      genBadge.style.cssText = genBadge.style.cssText.replace('#854F0B','#3B6D11').replace('#FAEEDA','#EAF3DE').replace('#EF9F27','#97C459');
+      setTimeout(function(){ genBadge.style.display = 'none'; }, 2000);
+    } catch(err) {
+      cnt = generatePlaceholderHtml('Generation failed', 'Error: ' + err.message);
+      genBadge.textContent = '✗ Failed';
+    }
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(cnt);
+    doc.close();
+  } else {
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(cnt);
+    doc.close();
+  }
+}
+
+function getArtifactContent(agentId, artifactName, agentOutput) {
+  var agentMap = ARTIFACT_CONTENT[agentId];
+  if (!agentMap) return agentOutput || '(No content available)';
+  var fn = agentMap[artifactName];
+  if (!fn) return agentOutput || '(No content available)';
+  var agent = AGENTS.find(function(a) { return a.id === agentId; });
+  // For prototype: check cache first
+  if (agentId === 'design' && artifactName === 'design-prototype.html' && agent && agent._cachedPrototype) {
+    return agent._cachedPrototype;
+  }
+  return fn(agent || { output: agentOutput });
+}
+
+function viewArtifact(agentId, artifactName) {
+  var agent = AGENTS.find(function(a) { return a.id === agentId; });
+  var cnt = getArtifactContent(agentId, artifactName, agent ? agent.output : '');
+  if (cnt === '__ASYNC_PROTOTYPE__') {
+    cnt = '<!-- Prototype not yet generated. Click "▶ Preview" first to generate it, then "Source" to view. -->\n<!-- It will be generated via Claude API based on your PRD and design system. -->';
+  }
+  var existing = document.getElementById('artifactViewerOverlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.className = 'artifact-viewer';
+  overlay.id = 'artifactViewerOverlay';
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+  var box = document.createElement('div');
+  box.className = 'artifact-viewer-box';
+
+  var header = document.createElement('div');
+  header.className = 'artifact-viewer-header';
+
+  var title = document.createElement('h3');
+  title.textContent = artifactName;
+
+  var actions = document.createElement('div');
+  actions.className = 'artifact-viewer-actions';
+
+  var btnCopy = document.createElement('button');
+  btnCopy.className = 'artifact-btn';
+  btnCopy.textContent = 'Copy';
+  btnCopy.onclick = function() { copyArtifact(agentId, artifactName); };
+
+  var btnDl = document.createElement('button');
+  btnDl.className = 'artifact-btn primary';
+  btnDl.textContent = 'Download';
+  btnDl.onclick = function() { downloadArtifact(agentId, artifactName); };
+
+  var btnClose = document.createElement('button');
+  btnClose.className = 'artifact-close';
+  btnClose.textContent = '✕';
+  btnClose.onclick = function() { overlay.remove(); };
+
+  actions.appendChild(btnCopy);
+  actions.appendChild(btnDl);
+  actions.appendChild(btnClose);
+  header.appendChild(title);
+  header.appendChild(actions);
+
+  var body = document.createElement('div');
+  body.className = 'artifact-viewer-body';
+  body.textContent = cnt;
+
+  box.appendChild(header);
+  box.appendChild(body);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+function copyArtifact(agentId, artifactName) {
+  var agent = AGENTS.find(function(a) { return a.id === agentId; });
+  var cnt = getArtifactContent(agentId, artifactName, agent ? agent.output : '');
+  if (cnt === '__ASYNC_PROTOTYPE__') { showToast('Click "▶ Preview" first to generate the prototype'); return; }
+  navigator.clipboard.writeText(cnt)
+    .then(function() { showToast('Copied to clipboard'); })
+    .catch(function() { showToast('Copy failed — try Download'); });
+}
+
+function downloadArtifact(agentId, artifactName) {
+  var agent = AGENTS.find(function(a) { return a.id === agentId; });
+  var cnt = getArtifactContent(agentId, artifactName, agent ? agent.output : '');
+  if (cnt === '__ASYNC_PROTOTYPE__') { showToast('Click "▶ Preview" first to generate the prototype'); return; }
+  var parts = artifactName.split('/').filter(Boolean);
+  var filename = parts[parts.length - 1] || artifactName;
+  var blob = new Blob([cnt], { type: 'text/plain' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Downloaded ' + filename);
+}
+
+function showToast(msg) {
+  var toast = document.getElementById('copyToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'copyToast';
+    toast.className = 'copy-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._hideTimer);
+  toast._hideTimer = setTimeout(function() { toast.classList.remove('show'); }, 2200);
+}
+
+// ── Agent feedback (per-agent Feedback tab) ───────────────────────────────────
+function saveAgentFeedback(agentId) {
+  var ta = document.getElementById('agent-fb-' + agentId);
+  if (!ta || !ta.value.trim()) return;
+  var val = ta.value.trim();
+  gateFeedback[agentId] = val;
+  var agent = AGENTS.find(function(a) { return a.id === agentId; });
+  var entry = {
+    agentId: agentId,
+    agentLabel: agent ? agent.label : agentId,
+    feedback: val,
+    applied: false,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    learning: generateLearning(agentId, val)
+  };
+  saveMemoryEntry(entry);
+  // Show saved badge in the Feedback tab (correct ID)
+  var savedTag = document.getElementById('agent-fb-saved-' + agentId);
+  if (savedTag) {
+    savedTag.style.display = 'inline-flex';
+    setTimeout(function() { savedTag.style.display = 'none'; }, 3000);
+  }
+  // Update feedback dot on tab header
+  var fbTab = document.querySelector('[onclick*="switchTab(\'' + agentId + '\',\'feedback\'"]');
+  if (fbTab && !fbTab.querySelector('.tab-feedback-dot')) {
+    fbTab.insertAdjacentHTML('beforeend', '<span class="tab-feedback-dot"></span>');
+  }
+  // Also update gate view elements if they exist
+  var gateTag = document.getElementById('fsaved-tag-' + agentId);
+  if (gateTag) { gateTag.style.display = 'inline-flex'; setTimeout(function(){ gateTag.style.display = 'none'; }, 3000); }
+  var hasTag = document.getElementById('fhas-' + agentId);
+  if (hasTag) hasTag.style.display = 'inline-flex';
+  refreshMemoryPanel();
+  showToast('Feedback saved for ' + (agent ? agent.label : agentId));
+}
+
+function saveFeedback(agentId) {
+  var el = document.getElementById('finput-' + agentId);
+  if (!el || !el.value.trim()) return;
+  var val = el.value.trim();
+  if (!gateFeedback) gateFeedback = {};
+  gateFeedback[agentId] = val;
+  var agent = AGENTS.find(function(a) { return a.id === agentId; });
+  var entry = {
+    agentId: agentId,
+    agentLabel: agent ? agent.label : agentId,
+    feedback: val,
+    applied: false,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    learning: generateLearning(agentId, val)
+  };
+  saveMemoryEntry(entry);
+  var tag = document.getElementById('fsaved-tag-' + agentId);
+  if (tag) { tag.style.display = 'inline-flex'; setTimeout(function(){ tag.style.display = 'none'; }, 3000); }
+  var hasTag = document.getElementById('fhas-' + agentId);
+  if (hasTag) hasTag.style.display = 'inline-flex';
+  refreshMemoryPanel();
+}
+
+function generateLearning(agentId, feedback) {
+  var lower = feedback.toLowerCase();
+  if (lower.includes('persona') || lower.includes('user')) return 'Orchestrator learned: emphasise user persona depth and specificity in future PRD generations.';
+  if (lower.includes('b2b') || lower.includes('enterprise')) return 'Orchestrator learned: default to B2B/enterprise framing when generating product documents.';
+  if (lower.includes('mobile') || lower.includes('app')) return 'Orchestrator learned: include mobile-first considerations in architecture and design system outputs.';
+  if (lower.includes('security') || lower.includes('auth')) return 'Orchestrator learned: elevate security and authentication requirements in architecture outputs.';
+  if (lower.includes('api') || lower.includes('endpoint')) return 'Orchestrator learned: expand API contract detail and include more endpoint examples.';
+  if (lower.includes('performance') || lower.includes('latency')) return 'Orchestrator learned: tighten performance SLAs and include load test baselines upfront.';
+  if (lower.includes('test') || lower.includes('coverage')) return 'Orchestrator learned: target higher test coverage thresholds in QA planning.';
+  if (lower.includes('scale') || lower.includes('microservice')) return 'Orchestrator learned: prioritise horizontal scaling and service isolation in architecture decisions.';
+  return 'Orchestrator learned: incorporate this revision pattern for the ' + (AGENTS.find(function(a){return a.id===agentId;})||{label:agentId}).label + ' in future pipeline runs.';
+}
+
+function loadMemory() {
+  try { return JSON.parse(localStorage.getItem('orchestrator_memory') || '[]'); } catch { return []; }
+}
+
+function saveMemoryEntry(entry) {
+  try {
+    var mem = loadMemory();
+    mem.push(entry);
+    if (mem.length > 50) mem.splice(0, mem.length - 50);
+    localStorage.setItem('orchestrator_memory', JSON.stringify(mem));
+  } catch {}
+}
+
+function markMemoryApplied(agentId, feedback) {
+  try {
+    var mem = loadMemory();
+    for (var i = mem.length - 1; i >= 0; i--) {
+      if (mem[i].agentId === agentId && mem[i].feedback === feedback) { mem[i].applied = true; break; }
+    }
+    localStorage.setItem('orchestrator_memory', JSON.stringify(mem));
+  } catch {}
+}
+
+function refreshMemoryPanel() {
+  var listEl = document.getElementById('memoryList');
+  if (!listEl) return;
+  var memEntries = loadMemory();
+  var countEl = document.querySelector('.memory-count');
+  if (countEl) countEl.textContent = memEntries.length + ' entries';
+  if (memEntries.length === 0) {
+    listEl.innerHTML = '<div class="empty-memory">No feedback stored yet.</div>';
+    return;
+  }
+  listEl.innerHTML = memEntries.slice().reverse().map(function(e) {
+    return '<div class="memory-entry">' +
+      '<div class="memory-entry-top">' +
+        '<span class="mem-agent-badge">' + e.agentLabel + '</span>' +
+        (e.applied ? '<span class="mem-applied-badge">&#10003; Applied</span>' : '') +
+        '<span class="mem-time">' + e.time + '</span>' +
+      '</div>' +
+      '<div class="mem-feedback">&ldquo;' + e.feedback + '&rdquo;</div>' +
+      '<div class="mem-learning">' + e.learning + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Apply all revisions (Human Gate) ─────────────────────────────────────────
+async function applyAllRevisions() {
+  var feedbackEntries = Object.entries(gateFeedback).filter(function([,v]) { return v.trim(); });
+  if (feedbackEntries.length === 0) {
+    alert('No revision feedback entered. Add feedback to at least one agent before applying revisions.');
+    return;
+  }
+
+  var revBtn = document.getElementById('gateReviseBtn');
+  var approveBtn = document.getElementById('gateApproveBtn');
+  if (revBtn) { revBtn.disabled = true; revBtn.textContent = 'Regenerating...'; }
+  if (approveBtn) approveBtn.disabled = true;
+
+  var brd = document.getElementById('brdInput') ? document.getElementById('brdInput').value.trim() : '';
+  var techStack = document.getElementById('techInput') ? document.getElementById('techInput').value.trim() : '';
+  var memContext = loadMemory().slice(-10).map(function(e) { return '- [' + e.agentLabel + '] ' + e.feedback; }).join('\n');
+
+  for (var [agentId, feedback] of feedbackEntries) {
+    var bodyEl = document.getElementById('fbody-' + agentId);
+    if (bodyEl && !bodyEl.classList.contains('open')) {
+      bodyEl.classList.add('open');
+      var chev = document.getElementById('fchev-' + agentId);
+      if (chev) chev.classList.add('open');
+    }
+
+    var agent = AGENTS.find(function(a) { return a.id === agentId; });
+    var statusEl = document.getElementById('finput-' + agentId);
+    if (statusEl) statusEl.disabled = true;
+
+    var revisingEl = document.createElement('div');
+    revisingEl.className = 'revising-row';
+    revisingEl.innerHTML = '<div class="spin"></div> Regenerating ' + (agent ? agent.label : agentId) + ' with your feedback...';
+    if (bodyEl) bodyEl.appendChild(revisingEl);
+
+    try {
+      var role = getOrchestratorRole();
+      var systemPrompt, userPrompt;
+
+      if (agentId === 'product') {
+        systemPrompt = buildSystemPrompt(role) + 'You are the Product Manager agent — REVISION RUN.\n' +
+          'TASK: Regenerate a revised PRD that strictly incorporates ALL human reviewer feedback.\n\n' +
+          'Output EXACTLY: # Product Requirement Document\n## Feature name\n## Problem statement\n## User personas\n## User stories\n## Acceptance criteria\n## Success metrics\n## Dependencies\n\n' +
+          'CONSTRAINTS REMINDER: Never hallucinate. Incorporate ALL feedback explicitly.' +
+          (memContext ? '\n\nOrchestrator memory:\n' + memContext : '');
+        userPrompt = 'Original BRD:\n' + brd + '\n\nTech stack:\n' + (techStack||'Not specified') +
+          '\n\nPrevious PRD:\n' + (agent ? agent.output : '') +
+          '\n\nFeedback to apply:\n' + feedback;
+
+      } else if (agentId === 'design') {
+        var productAgent = AGENTS.find(function(a) { return a.id === 'product'; });
+        systemPrompt = buildSystemPrompt(role) + 'You are the Design System Architect agent — REVISION RUN.\n' +
+          'TASK: Regenerate a revised design system incorporating ALL feedback. Remain fully derived from the PRD.\n\n' +
+          'Output sections: ## Design system: [name], ### Color tokens, ### Typography scale, ### Spacing system, ### Component inventory, ### Layout patterns, ### Design decisions log\n\n' +
+          'CONSTRAINTS: Every decision traces to PRD. Do not hallucinate.' +
+          (memContext ? '\n\nOrchestrator memory:\n' + memContext : '');
+        userPrompt = 'PRD:\n' + (productAgent ? productAgent.output : '') +
+          '\n\nTech stack:\n' + (techStack||'Not specified') +
+          '\n\nPrevious design system:\n' + (agent ? agent.output : '') +
+          '\n\nFeedback:\n' + feedback;
+
+      } else if (agentId === 'architecture') {
+        var productAgent2 = AGENTS.find(function(a) { return a.id === 'product'; });
+        var designAgentObj = AGENTS.find(function(a) { return a.id === 'design'; });
+        systemPrompt = buildSystemPrompt(role) + 'You are the System Architect agent — REVISION RUN.\n' +
+          'TASK: Regenerate a revised architecture incorporating ALL feedback. Remain fully derived from the PRD.\n\n' +
+          'Output sections: ## System architecture: [name], ### System modules, ### API contracts, ### Database schema, ### Service boundaries & integration patterns, ### Architecture decisions log\n\n' +
+          'CONSTRAINTS: Every module/API/table traces to PRD. API-first. Do not hallucinate.' +
+          (memContext ? '\n\nOrchestrator memory:\n' + memContext : '');
+        userPrompt = 'PRD:\n' + (productAgent2 ? productAgent2.output : '') +
+          '\n\nDesign system:\n' + (designAgentObj ? designAgentObj.output : '') +
+          '\n\nTech stack:\n' + (techStack||'Not specified') +
+          '\n\nPrevious architecture:\n' + (agent ? agent.output : '') +
+          '\n\nFeedback:\n' + feedback;
+
+      } else {
+        systemPrompt = buildSystemPrompt(role) + 'You are the ' + (agent ? agent.role : agentId) + ' agent — REVISION RUN.\n' +
+          'TASK: Regenerate output incorporating ALL feedback. Do not hallucinate.' +
+          (memContext ? '\n\nOrchestrator memory:\n' + memContext : '');
+        userPrompt = 'Previous output:\n' + (agent ? agent.output : '') + '\n\nFeedback:\n' + feedback;
+      }
+
+      agentStates[agentId] = 'running';
+      renderPipeline();
+
+      var result = await callClaudeAPI(systemPrompt, userPrompt, function(partial) {
+        if (agent) agent.output = partial;
+        var outEl = document.getElementById('tab-output-' + agentId);
+        if (outEl) outEl.innerHTML = '<div class="output-block">' + partial + '</div>';
+      });
+
+      if (agent) { agent.output = result; agent._cachedPrototype = null; }
+      agentStates[agentId] = 'complete';
+      markMemoryApplied(agentId, feedback);
+      renderPipeline();
+      activeTab[agentId] = 'output';
+      revisingEl.innerHTML = '<span style="color:#3B6D11;">&#10003; ' + (agent ? agent.label : agentId) + ' regenerated — <a href="#" style="color:#185FA5;text-decoration:underline;" onclick="showAgent(\'' + agentId + '\');return false;">view updated output ↗</a></span>';
+
+    } catch(err) {
+      revisingEl.innerHTML = '<span style="color:#A32D2D;">&#10007; Error: ' + err.message + '</span>';
+      agentStates[agentId] = 'complete';
+      renderPipeline();
+    }
+  }
+
+  refreshMemoryPanel();
+  if (revBtn) { revBtn.disabled = false; revBtn.textContent = 'Apply revisions & regenerate'; }
+  if (approveBtn) approveBtn.disabled = false;
+}
+
+function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+// ── API Key helpers ───────────────────────────────────────────────────────────
+function getApiKey() {
+  var inputEl = document.getElementById('apiKeyInput');
+  if (inputEl && inputEl.value.trim()) return inputEl.value.trim();
+  return localStorage.getItem('claude_api_key') || '';
+}
+
+function saveApiKey() {
+  var key = (document.getElementById('apiKeyInput') || {}).value || '';
+  if (key.trim()) {
+    localStorage.setItem('claude_api_key', key.trim());
+    var tag = document.getElementById('apiKeySavedTag');
+    if (tag) { tag.style.display = 'inline-flex'; setTimeout(function() { tag.style.display = 'none'; }, 2500); }
+    var status = document.getElementById('apiKeyStatus');
+    if (status) status.textContent = 'Key stored in browser localStorage';
+    showToast('API key saved');
+  }
+}
+
+function initApiKey() {
+  var stored = localStorage.getItem('claude_api_key');
+  if (stored) {
+    var el = document.getElementById('apiKeyInput');
+    if (el) el.value = stored;
+    var status = document.getElementById('apiKeyStatus');
+    if (status) status.textContent = 'Key loaded from localStorage';
+  }
+}
+
+// ── Claude API ────────────────────────────────────────────────────────────────
+async function callClaudeAPI(systemPrompt, userPrompt, onChunk) {
+  var apiKey = getApiKey();
+  if (!apiKey) throw new Error('API key not set. Please enter your Claude API key in the sidebar and click Save key.');
+  console.log('[callClaudeAPI] system length:', systemPrompt ? systemPrompt.length : 0, 'user length:', userPrompt ? userPrompt.length : 0);
+  var response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 4000,
+      stream: true,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }]
+    })
+  });
+
+  if (!response.ok) {
+    var errText = await response.text();
+    var errJson = null;
+    try { errJson = JSON.parse(errText); } catch {}
+    var msg = (errJson && errJson.error && errJson.error.message) ? errJson.error.message : errText.slice(0, 300);
+    throw new Error('API ' + response.status + ': ' + msg);
+  }
+
+  var reader = response.body.getReader();
+  var decoder = new TextDecoder();
+  var fullText = '';
+  var done = false;
+
+  var lastActivity = Date.now();
+  var TIMEOUT_MS = 90000; // 90s — generous for long responses
+
+  while (!done) {
+    // Timeout: if no bytes for 90s, abort
+    var timeLeft = TIMEOUT_MS - (Date.now() - lastActivity);
+    if (timeLeft <= 0) throw new Error('Stream timeout — no response for 90s. Try again or reduce input size.');
+
+    var readPromise = reader.read();
+    var timeoutPromise = new Promise(function(_, rej) {
+      setTimeout(function() { rej(new Error('Stream timeout — no bytes for 90s')); }, timeLeft);
+    });
+
+    var _ref = await Promise.race([readPromise, timeoutPromise]);
+    done = _ref.done;
+    if (_ref.value) {
+      lastActivity = Date.now();
+      var chunk = decoder.decode(_ref.value, { stream: true });
+      var lines = chunk.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line.startsWith('data: ')) continue;
+        var data = line.slice(6).trim();
+        if (data === '[DONE]') { done = true; break; }
+        try {
+          var parsed = JSON.parse(data);
+          if (parsed.type === 'message_stop') { done = true; break; }
+          if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.type === 'text_delta') {
+            fullText += parsed.delta.text;
+            if (onChunk) onChunk(fullText);
+          }
+        } catch {}
+      }
+    }
+  }
+  return fullText;
+}
+
+// ── System prompt builder ─────────────────────────────────────────────────────
+// Extracts a tight preamble from the orchestrator role (first 3 non-blank lines)
+// so agent prompts stay concise and within token budget.
+function buildSystemPrompt(role) {
+  var lines = (role || '').split('\n').filter(function(l) { return l.trim(); });
+  var preamble = lines.slice(0, 3).join(' ').trim();
+  if (!preamble) preamble = 'You are an expert software architect.';
+  return preamble + '\n\n';
+}
+
+// ── Agent runners ─────────────────────────────────────────────────────────────
+async function runProductAgent(brd, techStack) {
+  var role = getOrchestratorRole();
+  var memContext = loadMemory().filter(function(e) { return e.agentId === 'product'; }).slice(-5).map(function(e) { return '- ' + e.feedback; }).join('\n');
+
+  var systemPrompt =
+    'You are a Product Manager. Convert the business requirement into a PRD.\n\n' +
+    'STRICT RULES:\n' +
+    '1. Every sentence must be traceable to the business requirement provided.\n' +
+    '2. Do NOT add features, integrations, or personas not mentioned in the input.\n' +
+    '3. If the BRD is vague on a point, write TBD - requires clarification rather than inventing.\n' +
+    '4. User stories must use exact domain language from the BRD.\n' +
+    '5. Acceptance criteria must be measurable and reference only stated requirements.\n\n' +
+    'OUTPUT - use these exact headings:\n' +
+    '# Product Requirement Document\n' +
+    '## Feature name\n## Problem statement\n## User personas\n' +
+    '## User stories\n## Acceptance criteria\n## Success metrics\n## Dependencies' +
+    (memContext ? '\nLearned preferences:\n' + memContext : '');
+
+  var userPrompt = 'Business Requirement:\n' + brd + '\n\nTech Stack (context only, do not expand scope):\n' + (techStack || 'Not specified');
+
+  return callClaudeAPI(systemPrompt, userPrompt, function(partial) {
+    var agent = AGENTS.find(function(a) { return a.id === 'product'; });
+    if (agent) agent.output = partial;
+    if (currentView === 'product' && activeTab['product'] === 'output') {
+      var el = document.getElementById('tab-output-product');
+      if (el) el.innerHTML = '<div class="output-block">' + partial + '</div>';
+    }
+  });
+}
+
+async function runDesignAgent(prd, techStack) {
+  var role = getOrchestratorRole();
+  var memContext = loadMemory().filter(function(e) { return e.agentId === 'design'; }).slice(-5).map(function(e) { return '- ' + e.feedback; }).join('\n');
+
+  var systemPrompt =
+    'You are a Design System Architect. Your ONLY job is to produce a design system derived word-for-word from the PRD the user provides.\n\n' +
+    'STRICT RULES — violating any of these is a failure:\n' +
+    '1. NEVER invent a product name, feature, persona, or screen that does not appear verbatim in the PRD.\n' +
+    '2. Before writing any section, you MUST quote the exact PRD line that justifies it.\n' +
+    '3. Every component in the inventory must cite "maps to: [exact PRD user story text]".\n' +
+    '4. Every color decision must cite "chosen because: [domain/persona reason from PRD]".\n' +
+    '5. If the PRD does not mention a UI element, do NOT include it.\n' +
+    '6. Tech stack only influences implementation notes, never adds features.\n\n' +
+    'OUTPUT FORMAT — use these exact headings, nothing else:\n' +
+    '## Design system: [copy exact product name from PRD Feature name section]\n' +
+    '### PRD extraction\n' +
+    '[List: product name, user personas, features, acceptance criteria — copied verbatim from PRD]\n' +
+    '### Color tokens\n' +
+    '[primary/secondary/semantic colors. Each with: hex, usage, chosen because: <PRD reason>]\n' +
+    '### Typography scale\n' +
+    '[font sizes xs→2xl, weights, line-heights. Each justified by persona or PRD constraint]\n' +
+    '### Spacing system\n' +
+    '[4px or 8px grid tokens. Reference layout requirements from PRD if any]\n' +
+    '### Component inventory\n' +
+    '[Each component: name | purpose | maps to: <exact PRD user story>]\n' +
+    '### Layout patterns\n' +
+    '[Each layout: name | screens it covers | maps to: <exact PRD feature>]\n' +
+    '### Design decisions log\n' +
+    '[Each decision: what | why | PRD line that required it]\n' +
+    (memContext ? '\nApply these learned preferences from past runs:\n' + memContext : '');
+
+  var userPrompt = 'PRD to derive the design system from:\n\n' + prd +
+    '\n\nTech Stack (implementation notes only, do not add features):\n' + (techStack || 'Not specified');
+
+  return callClaudeAPI(systemPrompt, userPrompt, function(partial) {
+    var agent = AGENTS.find(function(a) { return a.id === 'design'; });
+    if (agent) agent.output = partial;
+    if (currentView === 'design' && activeTab['design'] === 'output') {
+      var el = document.getElementById('tab-output-design');
+      if (el) el.innerHTML = '<div class="output-block">' + partial + '</div>';
+    }
+  });
+}
+
+async function runArchitectureAgent(prd, designOutput, techStack) {
+  var role = getOrchestratorRole();
+  var memContext = loadMemory().filter(function(e) { return e.agentId === 'architecture'; }).slice(-5).map(function(e) { return '- ' + e.feedback; }).join('\n');
+
+  var systemPrompt =
+    'You are a System Architect. Design the architecture ONLY for what is described in the PRD.\n\n' +
+    'STRICT RULES:\n' +
+    '1. Every module must cite: implements PRD feature: <exact feature name>.\n' +
+    '2. Every API endpoint must cite: satisfies acceptance criterion: <exact criterion>.\n' +
+    '3. Every DB table must cite: stores entity from PRD: <exact entity>.\n' +
+    '4. Do NOT add services, endpoints, or tables not implied by the PRD.\n' +
+    '5. Use domain language verbatim from the PRD for all naming.\n\n' +
+    'OUTPUT - use these exact headings:\n' +
+    '## System architecture: [copy product name from PRD]\n' +
+    '### System modules\n### API contracts\n### Database schema\n' +
+    '### Service boundaries & integration patterns\n### Architecture decisions log' +
+    (memContext ? '\nLearned preferences:\n' + memContext : '');
+
+  var userPrompt = 'Product Requirement Document:\n' + prd +
+    '\n\nDesign System:\n' + (designOutput || 'Not yet generated') +
+    '\n\nTech Stack Context:\n' + (techStack || 'Not specified');
+
+  return callClaudeAPI(systemPrompt, userPrompt, function(partial) {
+    var agent = AGENTS.find(function(a) { return a.id === 'architecture'; });
+    if (agent) agent.output = partial;
+    if (currentView === 'architecture' && activeTab['architecture'] === 'output') {
+      var el = document.getElementById('tab-output-architecture');
+      if (el) el.innerHTML = '<div class="output-block">' + partial + '</div>';
+    }
+  });
+}
+
+// ── Post-gate agent runners ──────────────────────────────────────────────────
+function getAgent(id) { return AGENTS.find(function(a) { return a.id === id; }); }
+
+function streamToAgent(agentId, partial) {
+  var agent = getAgent(agentId);
+  if (agent) agent.output = partial;
+  if (currentView === agentId && activeTab[agentId] === 'output') {
+    var el = document.getElementById('tab-output-' + agentId);
+    if (el) el.innerHTML = '<div class="output-block">' + partial + '</div>';
+  }
+}
+
+async function runDevelopmentAgent(prd, archOutput, techStack) {
+  var role = getOrchestratorRole();
+  var mem = loadMemory().filter(function(e){return e.agentId==='development';}).slice(-3).map(function(e){return '- '+e.feedback;}).join('\n');
+  var systemPrompt = buildSystemPrompt(role) +
+    'You are the Development Agent. Generate production-ready service scaffolds STRICTLY from the PRD and architecture below.\n' +
+    'Output EXACTLY these sections:\n\n' +
+    '## Development output: [product name]\n' +
+    '### Service modules\n[List each service: name, tech, key files, key classes/functions]\n' +
+    '### Core implementation\n[For each service: controller, service layer, repository pattern — describe methods & signatures]\n' +
+    '### API endpoints implemented\n[Each endpoint with request/response shape, maps to PRD acceptance criterion]\n' +
+    '### Test stubs\n[Describe unit test files and key test cases per service]\n' +
+    '### Implementation decisions log\n[4-6 bullets: decision + PRD/arch requirement that drove it]\n\n' +
+    'Map every class, method, and endpoint to a PRD user story or architecture module.' +
+    (mem ? '\n\nLearned preferences:\n' + mem : '');
+  // Truncate context to avoid overloading token limits
+  var prdTrunc = prd.length > 4000 ? prd.slice(0, 4000) + '\n...[truncated for length]' : prd;
+  var archTrunc = archOutput.length > 4000 ? archOutput.slice(0, 4000) + '\n...[truncated for length]' : archOutput;
+  var userPrompt = 'PRD:\n' + prdTrunc + '\n\nArchitecture:\n' + archTrunc + '\n\nTech stack:\n' + (techStack||'Not specified');
+  return callClaudeAPI(systemPrompt, userPrompt, function(p){ streamToAgent('development', p); });
+}
+
+async function runOrchestratorAgent(archOutput, devOutput, techStack) {
+  var role = getOrchestratorRole();
+  var systemPrompt = buildSystemPrompt(role) +
+    'You are the Service Orchestrator agent. Analyse the architecture and development outputs below.\n' +
+    'Output EXACTLY these sections:\n\n' +
+    '## Service registry\n[Table: service name | version | port | dependencies | health endpoint]\n' +
+    '### Dependency graph\n[For each service: lists its upstream and downstream dependencies]\n' +
+    '### Coupling analysis\n[Identify any tight coupling, circular deps, or missing abstractions]\n' +
+    '### Communication patterns\n[Sync vs async per service pair. Message queues, events, REST calls.]\n' +
+    '### Orchestration decisions log\n[3-5 bullets with rationale]';
+  var archT = archOutput.length>3000?archOutput.slice(0,3000)+'\n...[truncated]':archOutput;
+  var devT = devOutput.length>3000?devOutput.slice(0,3000)+'\n...[truncated]':devOutput;
+  var userPrompt = 'Architecture:\n' + archT + '\n\nDevelopment output:\n' + devT + '\n\nTech stack:\n' + (techStack||'Not specified');
+  return callClaudeAPI(systemPrompt, userPrompt, function(p){ streamToAgent('orchestrator', p); });
+}
+
+async function runCodeReviewAgent(devOutput, archOutput) {
+  var role = getOrchestratorRole();
+  var systemPrompt = buildSystemPrompt(role) +
+    'You are the Code Review Agent. Review the development output against the architecture specification.\n' +
+    'Output EXACTLY these sections:\n\n' +
+    '## Code review report\n' +
+    '### Verdict\n[APPROVED / APPROVED WITH COMMENTS / REQUIRES CHANGES]\n' +
+    '### Architecture compliance\n[Check each service against its arch spec. Flag deviations.]\n' +
+    '### Code quality checks\n[Separation of concerns, SOLID principles, error handling, DTO usage]\n' +
+    '### Security pre-checks\n[Auth guards present, no secrets in code, input validation]\n' +
+    '### Comments\n[Specific actionable comments per service/file]\n' +
+    '### Review decision log\n[3-5 bullets explaining key decisions]';
+  var userPrompt = 'Architecture spec:\n' + archOutput + '\n\nDevelopment output:\n' + devOutput;
+  return callClaudeAPI(systemPrompt, userPrompt, function(p){ streamToAgent('review', p); });
+}
+
+async function runSecurityAgent(devOutput, archOutput, prd) {
+  var role = getOrchestratorRole();
+  var systemPrompt = buildSystemPrompt(role) +
+    'You are the Security Audit Agent. Perform a comprehensive security audit.\n' +
+    'Output EXACTLY these sections:\n\n' +
+    '## Security audit report\n' +
+    '### Scan summary\n[Overall risk level: LOW/MEDIUM/HIGH. Total issues by severity.]\n' +
+    '### Authentication & authorisation\n[Audit auth flows, token handling, role-based access vs PRD requirements]\n' +
+    '### Input validation & injection risks\n[Per endpoint: validation coverage, SQL/NoSQL injection vectors]\n' +
+    '### Secret & credential exposure\n[Hardcoded secrets, env var usage, key rotation]\n' +
+    '### Dependency vulnerabilities\n[Known CVEs in stated tech stack, recommended versions]\n' +
+    '### Security recommendations\n[Prioritised list: CRITICAL → HIGH → MEDIUM]';
+  var userPrompt = 'PRD (for auth requirements):\n' + prd + '\n\nArchitecture:\n' + archOutput + '\n\nDevelopment output:\n' + devOutput;
+  return callClaudeAPI(systemPrompt, userPrompt, function(p){ streamToAgent('security', p); });
+}
+
+async function runTestAgent(devOutput, archOutput, prd) {
+  var role = getOrchestratorRole();
+  var systemPrompt = buildSystemPrompt(role) +
+    'You are the Test Agent. Generate a complete test plan and simulate test results.\n' +
+    'Output EXACTLY these sections:\n\n' +
+    '## Test report\n' +
+    '### Test summary\n[Total: X passed, Y failed, Z skipped. Coverage estimate.]\n' +
+    '### Unit tests\n[Per service: test file, test cases, what each tests, pass/fail]\n' +
+    '### Integration tests\n[API endpoint tests: request, expected response, result]\n' +
+    '### Acceptance tests\n[Map each PRD acceptance criterion to a test case and result]\n' +
+    '### Failures & fixes\n[Any failures: root cause and fix applied (max 3 fix cycles)]\n' +
+    '### Coverage report\n[Per service: line coverage %, branch coverage %]';
+  var userPrompt = 'PRD (for acceptance criteria):\n' + prd + '\n\nArchitecture:\n' + archOutput + '\n\nDevelopment output:\n' + devOutput;
+  return callClaudeAPI(systemPrompt, userPrompt, function(p){ streamToAgent('test', p); });
+}
+
+async function runPerformanceAgent(devOutput, archOutput, testOutput) {
+  var role = getOrchestratorRole();
+  var systemPrompt = buildSystemPrompt(role) +
+    'You are the Performance Agent. Analyse and benchmark the system.\n' +
+    'Output EXACTLY these sections:\n\n' +
+    '## Performance report\n' +
+    '### Load test configuration\n[Concurrent users, ramp-up, duration, target endpoints]\n' +
+    '### API latency benchmarks\n[Per endpoint: p50, p95, p99 latency targets vs actuals]\n' +
+    '### Database performance\n[Query analysis: slow queries, missing indexes, N+1 risks]\n' +
+    '### Memory & CPU profile\n[Per service: memory baseline, peak, CPU utilisation under load]\n' +
+    '### Bottlenecks identified\n[Ranked list with root cause and recommended fix]\n' +
+    '### Performance decisions log\n[3-5 optimisations applied with rationale]';
+  var userPrompt = 'Architecture:\n' + archOutput + '\n\nDevelopment output:\n' + devOutput + '\n\nTest output:\n' + (testOutput||'');
+  return callClaudeAPI(systemPrompt, userPrompt, function(p){ streamToAgent('performance', p); });
+}
+
+async function runDocumentationAgent(prd, archOutput, devOutput, techStack) {
+  var role = getOrchestratorRole();
+  var systemPrompt = buildSystemPrompt(role) +
+    'You are the Documentation Agent. Generate complete technical documentation.\n' +
+    'Output EXACTLY these sections:\n\n' +
+    '## Documentation: [product name]\n' +
+    '### API reference\n[Per endpoint: method, path, description, request body, response, auth requirement, example]\n' +
+    '### Developer onboarding guide\n[Prerequisites, local setup steps, environment variables, first API call]\n' +
+    '### Architecture overview\n[Plain-English summary of system design with key decisions]\n' +
+    '### Deployment guide\n[Environment requirements, build steps, deployment commands, health checks]\n' +
+    '### Runbook\n[Common operational tasks: restart service, rollback, check logs, scale up]';
+  var userPrompt = 'PRD:\n' + prd + '\n\nArchitecture:\n' + archOutput + '\n\nDevelopment:\n' + devOutput + '\n\nTech stack:\n' + (techStack||'Not specified');
+  return callClaudeAPI(systemPrompt, userPrompt, function(p){ streamToAgent('documentation', p); });
+}
+
+async function runDevOpsAgent(prd, archOutput, devOutput, testOutput, perfOutput) {
+  var role = getOrchestratorRole();
+  var systemPrompt = buildSystemPrompt(role) +
+    'You are the DevOps Release Agent. Generate all release artefacts.\n' +
+    'Output EXACTLY these sections:\n\n' +
+    '## Release: [product name] v1.0.0\n' +
+    '### Pull request\n[PR title, description, linked issues, reviewers, labels]\n' +
+    '### Release notes\n[Whats new, bug fixes, breaking changes, migration notes]\n' +
+    '### CI/CD pipeline config\n[Steps: lint → test → build → security scan → deploy. Commands per step.]\n' +
+    '### Deployment checklist\n[Pre-deploy, deploy, post-deploy verification steps]\n' +
+    '### Rollback plan\n[Trigger conditions, rollback commands, verification]';
+  var userPrompt = 'PRD:\n' + prd + '\n\nArchitecture:\n' + archOutput + '\n\nDevelopment:\n' + devOutput + '\n\nTest results:\n' + (testOutput||'') + '\n\nPerformance:\n' + (perfOutput||'');
+  return callClaudeAPI(systemPrompt, userPrompt, function(p){ streamToAgent('devops', p); });
+}
+
+
+// ── Session cache ─────────────────────────────────────────────────────────────
+var SESSION_KEY = 'sf_session_v1';
+
+function saveSession() {
+  try {
+    var data = {
+      brd: (document.getElementById('brdInput')||{}).value || '',
+      tech: (document.getElementById('techInput')||{}).value || '',
+      agents: {},
+      states: agentStates
+    };
+    AGENTS.forEach(function(a) {
+      if (a.output) data.agents[a.id] = { output: a.output };
+    });
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  } catch(e) {}
+}
+
+function loadSession() {
+  try {
+    var raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return false;
+    var data = JSON.parse(raw);
+    if (data.brd) { var b = document.getElementById('brdInput'); if (b) b.value = data.brd; }
+    if (data.tech) { var t = document.getElementById('techInput'); if (t) t.value = data.tech; }
+    if (data.agents) {
+      AGENTS.forEach(function(a) {
+        if (data.agents[a.id] && data.agents[a.id].output) a.output = data.agents[a.id].output;
+      });
+    }
+    if (data.states) {
+      Object.keys(data.states).forEach(function(id) { agentStates[id] = data.states[id]; });
+    }
+    return true;
+  } catch(e) { return false; }
+}
+
+function clearSession() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch(e) {}
+}
+
+// ── Pipeline runner ───────────────────────────────────────────────────────────
+async function startPipeline() {
+  if (pipelineRunning) return;
+  var brd = document.getElementById('brdInput').value.trim();
+  if (!brd) { alert('Please enter a business requirement first.'); return; }
+  var techStack = document.getElementById('techInput').value.trim();
+
+  pipelineRunning = true;
+  gateFeedback = {};
+  document.getElementById('runBtn').disabled = true;
+  var gp = document.getElementById('globalProgress');
+  gp.style.display = 'flex';
+
+  var gateIdx = AGENTS.findIndex(function(a) { return a.isGate; });
+  var preGate = AGENTS.filter(function(a, i) { return !a.isGate && i < gateIdx; });
+  var postGate = AGENTS.filter(function(a, i) { return !a.isGate && i > gateIdx; });
+  var gateAgent = AGENTS[gateIdx];
+  var total = AGENTS.length;
+  var done = 0;
+
+  initStates(true);
+
+  for (var _i = 0; _i < preGate.length; _i++) {
+    var agent = preGate[_i];
+    agentStates[agent.id] = 'running';
+    updateProgress(done, total, 'Running ' + agent.label + '...');
+    renderPipeline();
+    showAgent(agent.id);
+
+    if (agent.id === 'product') {
+      activeTab['product'] = 'output';
+      showAgent('product');
+      // Use cached PRD if available (skip re-generation)
+      if (agent.output && agent.output.trim() && agent._useCache) {
+        agent._useCache = false;
+        showToast('Product agent: using cached PRD');
+      } else {
+        try {
+          var result = await runProductAgent(brd, techStack);
+          agent.output = result;
+        } catch(err) {
+          agent.output = 'Error generating PRD: ' + err.message;
+        }
+      }
+
+    } else if (agent.id === 'design') {
+      var productAgent = AGENTS.find(function(a) { return a.id === 'product'; });
+      activeTab['design'] = 'output';
+      showAgent('design');
+      try {
+        var result = await runDesignAgent(productAgent ? productAgent.output : '', techStack);
+        agent.output = result;
+        agent._cachedPrototype = null; // clear stale cache
+      } catch(err) {
+        agent.output = 'Error generating design system: ' + err.message;
+      }
+
+    } else if (agent.id === 'architecture') {
+      var productAgent = AGENTS.find(function(a) { return a.id === 'product'; });
+      var designAgent = AGENTS.find(function(a) { return a.id === 'design'; });
+      activeTab['architecture'] = 'output';
+      showAgent('architecture');
+      try {
+        var result = await runArchitectureAgent(
+          productAgent ? productAgent.output : '',
+          designAgent ? designAgent.output : '',
+          techStack
+        );
+        agent.output = result;
+      } catch(err) {
+        agent.output = 'Error generating architecture: ' + err.message;
+      }
+
+    } else {
+      await sleep(1800);
+    }
+
+    agentStates[agent.id] = 'complete';
+    saveSession();
+    done++;
+    renderPipeline();
+    if (currentView === agent.id) showAgent(agent.id);
+  }
+
+  agentStates[gateAgent.id] = 'waiting';
+  updateProgress(done, total, 'Waiting for approval...');
+  renderPipeline();
+  showAgent(gateAgent.id);
+  await waitForApproval();
+  agentStates[gateAgent.id] = 'complete';
+  done++;
+  renderPipeline();
+
+  // ── Post-gate agents: fully Claude-wired ────────────────────────────────────
+  var ctx = {
+    prd: (getAgent('product') || {}).output || '',
+    design: (getAgent('design') || {}).output || '',
+    arch: (getAgent('architecture') || {}).output || '',
+    tech: techStack
+  };
+
+  for (var _j = 0; _j < postGate.length; _j++) {
+    var agent = postGate[_j];
+    agentStates[agent.id] = 'running';
+    updateProgress(done, total, 'Running ' + agent.label + '...');
+    renderPipeline();
+    activeTab[agent.id] = 'output';
+    showAgent(agent.id);
+
+    try {
+      var result;
+      if (agent.id === 'development') {
+        result = await runDevelopmentAgent(ctx.prd, ctx.arch, ctx.tech);
+      } else if (agent.id === 'orchestrator') {
+        result = await runOrchestratorAgent(ctx.arch, ctx.dev || '', ctx.tech);
+      } else if (agent.id === 'review') {
+        result = await runCodeReviewAgent(ctx.dev || '', ctx.arch);
+      } else if (agent.id === 'security') {
+        result = await runSecurityAgent(ctx.dev || '', ctx.arch, ctx.prd);
+      } else if (agent.id === 'test') {
+        result = await runTestAgent(ctx.dev || '', ctx.arch, ctx.prd);
+      } else if (agent.id === 'performance') {
+        result = await runPerformanceAgent(ctx.dev || '', ctx.arch, ctx.test || '');
+      } else if (agent.id === 'documentation') {
+        result = await runDocumentationAgent(ctx.prd, ctx.arch, ctx.dev || '', ctx.tech);
+      } else if (agent.id === 'devops') {
+        result = await runDevOpsAgent(ctx.prd, ctx.arch, ctx.dev || '', ctx.test || '', ctx.perf || '');
+      } else {
+        await sleep(1200);
+        result = agent.output || '';
+      }
+      agent.output = result;
+      // Pass outputs downstream as context
+      if (agent.id === 'development') ctx.dev = result;
+      if (agent.id === 'test') ctx.test = result;
+      if (agent.id === 'performance') ctx.perf = result;
+    } catch(err) {
+      var errMsg = 'Error in ' + agent.label + ': ' + err.message;
+      agent.output = errMsg;
+      console.error('[pipeline] ' + errMsg);
+      // Push error to live output panel immediately
+      var errEl = document.getElementById('tab-output-' + agent.id);
+      if (errEl) errEl.innerHTML = '<div class="output-block" style="color:#c0392b;background:#fdf0f0;padding:12px;border-radius:8px;border:1px solid #f5c6cb;">' +
+        '<strong>\u26a0 Agent failed:</strong> ' + errMsg + '<br><br>' +
+        '<em>You can use Fix &amp; Rerun on the Overview tab to retry with a custom instruction, or Reset the pipeline.</em></div>';
+    }
+
+    agentStates[agent.id] = 'complete';
+    saveSession();
+    done++;
+    renderPipeline();
+    if (currentView === agent.id) showAgent(agent.id);
+  }
+
+  updateProgress(total, total, 'Pipeline complete ✓');
+  pipelineRunning = false;
+  document.getElementById('runBtn').disabled = false;
+  showAgent('devops');
+}
+
+function waitForApproval() {
+  return new Promise(function(resolve) { window._approvalResolve = resolve; });
+}
+
+function approveGate() {
+  if (window._approvalResolve) { window._approvalResolve(); window._approvalResolve = null; }
+}
+
+function rejectGate() {
+  if (confirm('Reject and halt the pipeline? This will reset all progress.')) { resetPipeline(); }
+}
+
+function updateProgress(done, total, label) {
+  document.getElementById('progressLabel').textContent = label;
+  document.getElementById('globalBar').style.width = Math.round((done / total) * 100) + '%';
+}
+
+function resetPipeline() {
+  pipelineRunning = false;
+  gateFeedback = {};
+  window._approvalResolve = null;
+  clearSession();
+  initStates(true);
+  document.getElementById('runBtn').disabled = false;
+  var gp = document.getElementById('globalProgress');
+  if (gp) { gp.style.display = 'none'; }
+  AGENTS.forEach(function(a) { a.output = ''; a._cachedPrototype = null; });
+  renderHome();
+  showToast('Pipeline reset — session cleared');
+}
+
+// ── Orchestrator Role Panel ───────────────────────────────────────────────────
+function initRolePanel() {
+  var ta = document.getElementById('roleTextarea');
+  if (ta) { ta.value = DEFAULT_ORCHESTRATOR_ROLE; orchestratorRole = DEFAULT_ORCHESTRATOR_ROLE; }
+  updateRoleStrip();
+}
+
+function toggleRolePanel(forceOpen) {
+  var body = document.getElementById('rolePanelBody');
+  var chev = document.getElementById('roleChevron');
+  if (!body) return;
+  var isOpen = body.classList.contains('open');
+  body.classList.toggle('open', forceOpen || !isOpen);
+  if (chev) chev.classList.toggle('open', forceOpen || !isOpen);
+}
+
+function saveRole() {
+  var ta = document.getElementById('roleTextarea');
+  if (!ta) return;
+  orchestratorRole = ta.value.trim() || DEFAULT_ORCHESTRATOR_ROLE;
+  updateRoleStrip();
+  showToast('Orchestrator role applied — takes effect on next pipeline run');
+  var badge = document.querySelector('.role-badge');
+  if (badge) {
+    badge.style.background = 'rgba(59,109,17,0.35)';
+    badge.style.borderColor = 'rgba(59,109,17,0.6)';
+    setTimeout(function() { badge.style.background = ''; badge.style.borderColor = ''; }, 1200);
+  }
+}
+
+function resetRole() {
+  var ta = document.getElementById('roleTextarea');
+  if (ta) ta.value = DEFAULT_ORCHESTRATOR_ROLE;
+  orchestratorRole = DEFAULT_ORCHESTRATOR_ROLE;
+  updateRoleStrip();
+  showToast('Role reset to default');
+}
+
+function updateRoleStrip() {
+  var role = getOrchestratorRole();
+  var preview = document.getElementById('roleStripPreview');
+  var badgeLabel = document.getElementById('roleBadgeLabel');
+  if (preview) {
+    var firstLine = role.split('\n').find(function(l) { return l.trim() && !l.startsWith('#'); }) || '';
+    preview.textContent = firstLine.trim();
+  }
+  if (badgeLabel) {
+    badgeLabel.textContent = (role !== DEFAULT_ORCHESTRATOR_ROLE) ? 'Custom role' : 'Role active';
+  }
+}
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(agentId, tabName, el) {
+  activeTab[agentId] = tabName;
+  // Update tab strip active state
+  var strip = el.closest('.tabs');
+  if (strip) {
+    strip.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    el.classList.add('active');
+  }
+  // Show correct tab-content panel
+  ['overview','output','artifacts','feedback'].forEach(function(t) {
+    var panel = document.getElementById('tab-' + t + '-' + agentId);
+    if (panel) panel.classList.toggle('active', t === tabName);
+  });
+}
+
+// ── Gate feedback helpers ────────────────────────────────────────────────────
+function toggleFeedbackRow(agentId) {
+  var body = document.getElementById('fbody-' + agentId);
+  var chev = document.getElementById('fchev-' + agentId);
+  if (!body) return;
+  body.classList.toggle('open');
+  if (chev) chev.classList.toggle('open');
+}
+
+function onFeedbackInput(agentId) {
+  var el = document.getElementById('finput-' + agentId);
+  if (!el) return;
+  var hasTag = document.getElementById('fhas-' + agentId);
+  if (hasTag) hasTag.style.display = el.value.trim() ? 'inline-flex' : 'none';
+}
+
+
+
+// ── Fix panel builder (avoids nested quote hell) ──────────────────────────────
+function buildFixPanel(agentId, continueVisible) {
+  var d = document.createElement('div');
+  d.className = 'section-card';
+  d.id = 'fix-panel-' + agentId;
+  d.style.cssText = 'margin-top:12px;border:0.5px solid var(--color-border-secondary);';
+
+  var header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+  var h3 = document.createElement('h3');
+  h3.style.margin = '0';
+  h3.textContent = 'Fix & rerun this agent';
+  var sub = document.createElement('span');
+  sub.style.cssText = 'font-size:11px;color:var(--color-text-tertiary);';
+  sub.textContent = 'Previous agents work is preserved';
+  header.appendChild(h3);
+  header.appendChild(sub);
+
+  var p = document.createElement('p');
+  p.style.cssText = 'font-size:13px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.5;';
+  p.textContent = 'Describe what to fix. Only this agent re-runs — previous outputs stay cached.';
+
+  var ta = document.createElement('textarea');
+  ta.id = 'fix-prompt-' + agentId;
+  ta.style.cssText = 'width:100%;min-height:80px;padding:9px 11px;border:0.5px solid var(--color-border-secondary);border-radius:8px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px;font-family:var(--font-sans);resize:vertical;line-height:1.5;box-sizing:border-box;';
+  ta.placeholder = 'e.g. Color tokens should use brand blue #1A73E8 as primary. Prototype screens must match the PRD user stories exactly.';
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;';
+  var btn = document.createElement('button');
+  btn.className = 'gate-btn revise-apply';
+  btn.id = 'fix-btn-' + agentId;
+  btn.textContent = 'Fix & rerun';
+  btn.onclick = function() { fixAndRerun(agentId); };
+  var statusSpan = document.createElement('span');
+  statusSpan.id = 'fix-status-' + agentId;
+  statusSpan.style.cssText = 'font-size:12px;color:var(--color-text-secondary);';
+  btnRow.appendChild(btn);
+  btnRow.appendChild(statusSpan);
+
+  var continueDiv = document.createElement('div');
+  continueDiv.id = 'fix-continue-' + agentId;
+  continueDiv.style.cssText = 'display:' + (continueVisible||'none') + ';align-items:center;gap:10px;margin-top:12px;padding:10px 12px;background:var(--color-background-success);border:0.5px solid var(--color-border-success);border-radius:8px;';
+  var checkSpan = document.createElement('span');
+  checkSpan.style.cssText = 'font-size:13px;color:var(--color-text-success);';
+  checkSpan.textContent = '✓ Fix applied. Ready to continue pipeline.';
+  var contBtn = document.createElement('button');
+  contBtn.className = 'gate-btn approve';
+  contBtn.style.marginLeft = 'auto';
+  contBtn.textContent = 'Continue pipeline →';
+  contBtn.onclick = function() { continueFromAgent(agentId); };
+  continueDiv.appendChild(checkSpan);
+  continueDiv.appendChild(contBtn);
+
+  d.appendChild(header);
+  d.appendChild(p);
+  d.appendChild(ta);
+  d.appendChild(btnRow);
+  d.appendChild(continueDiv);
+
+  return d.outerHTML;
+}
+
+
+// ── Fix & Rerun sticky bar builder ────────────────────────────────────────────
+function buildFixBar(agentId, continueVisible) {
+  var savedPrompt = (window._fixPrompts && window._fixPrompts[agentId]) || '';
+  var contStyle = continueVisible === 'flex'
+    ? 'display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 12px;background:#EAF3DE;border:0.5px solid #97C459;border-radius:8px;'
+    : 'display:none;align-items:center;gap:10px;margin-top:10px;padding:10px 12px;background:#EAF3DE;border:0.5px solid #97C459;border-radius:8px;';
+
+  return '<div id="fix-bar-' + agentId + '" style="margin-top:16px;padding:14px 16px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);border-radius:12px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+      '<span style="font-size:13px;font-weight:600;color:var(--color-text-primary);">&#128295; Fix &amp; rerun this agent</span>' +
+      '<span style="font-size:11px;color:var(--color-text-tertiary);margin-left:auto;">Other agents stay cached</span>' +
+    '</div>' +
+    '<textarea id="fix-prompt-' + agentId + '" style="width:100%;min-height:68px;padding:9px 11px;border:0.5px solid var(--color-border-secondary);border-radius:8px;background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;font-family:var(--font-sans);resize:vertical;line-height:1.5;box-sizing:border-box;" placeholder="Describe what to fix, e.g. Color tokens should use brand blue #1A73E8. Prototype must match PRD user stories.">' + escHtml(savedPrompt) + '</textarea>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+      '<button id="fix-btn-' + agentId + '" class="gate-btn revise-apply" data-fixagent="' + agentId + '">Fix &amp; rerun</button>' +
+      '<span id="fix-status-' + agentId + '" style="font-size:12px;color:var(--color-text-secondary);"></span>' +
+    '</div>' +
+    '<div id="fix-continue-' + agentId + '" style="' + contStyle + '">' +
+      '<span style="font-size:13px;color:#2D5A0E;">✓ Fix applied — review the Output tab, then continue.</span>' +
+      '<button class="gate-btn approve" style="margin-left:auto;" data-continueagent="' + agentId + '">Continue pipeline \u2192</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// ── Fix & Rerun ───────────────────────────────────────────────────────────────
+var agentFixReady = null; // id of agent that was just fixed, ready to continue
+
+async function fixAndRerun(agentId) {
+  var promptEl = document.getElementById('fix-prompt-' + agentId);
+  if (!promptEl || !promptEl.value.trim()) {
+    showToast('Enter a fix description first');
+    return;
+  }
+  var fixInstruction = promptEl.value.trim();
+
+  // Persist textarea value so it survives any re-render
+  if (!window._fixPrompts) window._fixPrompts = {};
+  window._fixPrompts[agentId] = fixInstruction;
+
+  var agent = getAgent(agentId);
+  if (!agent) return;
+  if (pipelineRunning) { showToast('Pipeline is running — wait for it to finish first'); return; }
+
+  var btn    = document.getElementById('fix-btn-' + agentId);
+  var status = document.getElementById('fix-status-' + agentId);
+  var contDiv = document.getElementById('fix-continue-' + agentId);
+
+  if (btn)    { btn.disabled = true; btn.textContent = 'Fixing...'; }
+  if (status) { status.textContent = 'Calling Claude…'; }
+  if (contDiv){ contDiv.style.display = 'none'; }
+
+  // Switch to output tab so user sees streaming
+  activeTab[agentId] = 'output';
+  var view = document.getElementById('agentView');
+  if (view) {
+    view.querySelectorAll('.tab-content').forEach(function(p) {
+      p.classList.toggle('active', p.id === 'tab-output-' + agentId);
+    });
+    var strip = view.querySelector('.tabs');
+    if (strip) strip.querySelectorAll('.tab').forEach(function(t, i) {
+      t.classList.toggle('active', i === 1);
+    });
+  }
+
+  agentStates[agentId] = 'running';
+  renderPipeline();
+
+  try {
+    console.log('[fixAndRerun] starting fix for', agentId);
+    var result = await runAgentWithFix(agentId, fixInstruction);
+    console.log('[fixAndRerun] done, length:', result ? result.length : 0);
+
+    agent.output = result;
+    agent._cachedPrototype = null;
+    agentStates[agentId] = 'complete';
+    agentFixReady = agentId;
+    saveSession();
+    renderPipeline();
+
+    // Re-query — fix bar is outside tabs so it survived renderPipeline
+    var btn2    = document.getElementById('fix-btn-' + agentId);
+    var status2 = document.getElementById('fix-status-' + agentId);
+    var cont2   = document.getElementById('fix-continue-' + agentId);
+    if (btn2)    { btn2.disabled = false; btn2.textContent = 'Fix & rerun'; }
+    if (status2) { status2.textContent = ''; }
+    if (cont2)   { cont2.style.display = 'flex'; }
+
+    showToast('✓ Fix applied — review output, then continue pipeline');
+  } catch(err) {
+    console.error('[fixAndRerun] error:', err);
+    agentStates[agentId] = 'complete';
+    renderPipeline();
+    var btn2    = document.getElementById('fix-btn-' + agentId);
+    var status2 = document.getElementById('fix-status-' + agentId);
+    if (btn2)    { btn2.disabled = false; btn2.textContent = 'Fix & rerun'; }
+    if (status2) { status2.textContent = 'Error: ' + err.message; }
+    showToast('Fix failed: ' + err.message);
+  }
+}
+async function runAgentWithFix(agentId, fixInstruction) {
+  var role = getOrchestratorRole();
+  var agent = getAgent(agentId);
+  var techStack = (document.getElementById('techInput')||{}).value || '';
+
+  // Build context the same way startPipeline does
+  var prd  = (getAgent('product') || {}).output || '';
+  var design = (getAgent('design') || {}).output || '';
+  var arch = (getAgent('architecture') || {}).output || '';
+  var dev  = (getAgent('development') || {}).output || '';
+  var test = (getAgent('test') || {}).output || '';
+
+  var fixPrefix = buildSystemPrompt(role) +
+    'You are the ' + agent.label + '. You are re-running with a specific fix instruction.\n' +
+    'FIX INSTRUCTION: ' + fixInstruction + '\n\n' +
+    'Apply the fix instruction precisely. Keep everything else from your previous output intact unless the fix requires changing it.\n';
+
+  var userContent = 'Previous output to fix:\n' + (agent.output || '') + '\n\n';
+
+  if (agentId === 'product') {
+    userContent += 'BRD: ' + ((document.getElementById('brdInput')||{}).value||'') + '\nTech stack: ' + techStack;
+  } else if (agentId === 'design') {
+    userContent += 'PRD context:\n' + prd;
+  } else if (agentId === 'architecture') {
+    userContent += 'PRD context:\n' + prd + '\n\nDesign system:\n' + design;
+  } else if (agentId === 'development') {
+    userContent += 'PRD:\n' + prd + '\n\nArchitecture:\n' + arch;
+  } else if (agentId === 'orchestrator') {
+    userContent += 'Architecture:\n' + arch + '\n\nDevelopment:\n' + dev;
+  } else if (agentId === 'review') {
+    userContent += 'Architecture:\n' + arch + '\n\nDevelopment:\n' + dev;
+  } else if (agentId === 'security') {
+    userContent += 'PRD:\n' + prd + '\n\nArchitecture:\n' + arch + '\n\nDevelopment:\n' + dev;
+  } else if (agentId === 'test') {
+    userContent += 'PRD:\n' + prd + '\n\nArchitecture:\n' + arch + '\n\nDevelopment:\n' + dev;
+  } else if (agentId === 'performance') {
+    userContent += 'Architecture:\n' + arch + '\n\nDevelopment:\n' + dev + '\n\nTest:\n' + test;
+  } else if (agentId === 'documentation') {
+    userContent += 'PRD:\n' + prd + '\n\nArchitecture:\n' + arch + '\n\nDevelopment:\n' + dev;
+  } else if (agentId === 'devops') {
+    userContent += 'PRD:\n' + prd + '\n\nArchitecture:\n' + arch + '\n\nDevelopment:\n' + dev + '\n\nTest:\n' + test;
+  }
+
+  return callClaudeAPI(fixPrefix, userContent, function(partial) {
+    streamToAgent(agentId, partial);
+  });
+}
+
+async function continueFromAgent(agentId) {
+  if (pipelineRunning) { showToast('Pipeline already running'); return; }
+
+  // Dismiss continue button
+  agentFixReady = null;
+  var cd = document.getElementById('fix-continue-' + agentId);
+  if (cd) cd.style.display = 'none';
+
+  var allIds = AGENTS.filter(function(a){ return !a.isGate; }).map(function(a){ return a.id; });
+  var startIdx = allIds.indexOf(agentId);
+  if (startIdx === -1) return;
+
+  // Agents to run: everything after agentId (not including it)
+  var toRun = allIds.slice(startIdx + 1);
+  if (toRun.length === 0) { showToast('No agents to run after this one'); return; }
+
+  pipelineRunning = true;
+  var gp = document.getElementById('globalProgress');
+  if (gp) gp.style.display = 'flex';
+  document.getElementById('runBtn').disabled = true;
+
+  var total = AGENTS.length;
+  var done = AGENTS.filter(function(a){ return agentStates[a.id] === 'complete'; }).length;
+  var techStack = (document.getElementById('techInput')||{}).value || '';
+
+  var ctx = {
+    prd:  (getAgent('product') || {}).output || '',
+    design: (getAgent('design') || {}).output || '',
+    arch: (getAgent('architecture') || {}).output || '',
+    dev:  (getAgent('development') || {}).output || '',
+    test: (getAgent('test') || {}).output || '',
+    perf: (getAgent('performance') || {}).output || '',
+    tech: techStack
+  };
+
+  for (var k = 0; k < toRun.length; k++) {
+    var aid = toRun[k];
+    var ag = getAgent(aid);
+    if (!ag) continue;
+
+    agentStates[aid] = 'running';
+    updateProgress(done, total, 'Running ' + ag.label + '...');
+    renderPipeline();
+    activeTab[aid] = 'output';
+    showAgent(aid);
+
+    try {
+      var result;
+      if (aid === 'development') {
+        result = await runDevelopmentAgent(ctx.prd, ctx.arch, ctx.tech);
+      } else if (aid === 'orchestrator') {
+        result = await runOrchestratorAgent(ctx.arch, ctx.dev, ctx.tech);
+      } else if (aid === 'review') {
+        result = await runCodeReviewAgent(ctx.dev, ctx.arch);
+      } else if (aid === 'security') {
+        result = await runSecurityAgent(ctx.dev, ctx.arch, ctx.prd);
+      } else if (aid === 'test') {
+        result = await runTestAgent(ctx.dev, ctx.arch, ctx.prd);
+      } else if (aid === 'performance') {
+        result = await runPerformanceAgent(ctx.dev, ctx.arch, ctx.test);
+      } else if (aid === 'documentation') {
+        result = await runDocumentationAgent(ctx.prd, ctx.arch, ctx.dev, ctx.tech);
+      } else if (aid === 'devops') {
+        result = await runDevOpsAgent(ctx.prd, ctx.arch, ctx.dev, ctx.test, ctx.perf);
+      } else {
+        result = ag.output || '';
+      }
+      ag.output = result;
+      if (aid === 'development') ctx.dev = result;
+      if (aid === 'test') ctx.test = result;
+      if (aid === 'performance') ctx.perf = result;
+    } catch(err) {
+      ag.output = 'Error: ' + err.message;
+    }
+
+    agentStates[aid] = 'complete';
+    saveSession();
+    done++;
+    renderPipeline();
+    if (currentView === aid) showAgent(aid);
+  }
+
+  updateProgress(total, total, 'Pipeline complete ✓');
+  pipelineRunning = false;
+  document.getElementById('runBtn').disabled = false;
+  showAgent(toRun[toRun.length - 1]);
+  showToast('Pipeline continued and completed');
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initStates();
+// Restore session from sessionStorage if available
+var _sessionRestored = loadSession();
+renderHome();
+initRolePanel();
+initApiKey();
+if (_sessionRestored) {
+  // Re-render pipeline to show restored states
+  renderPipeline();
+  showToast('Session restored — previous pipeline outputs loaded');
+}
+
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  var action = btn.getAttribute('data-action');
+  var agentId = btn.getAttribute('data-agent');
+  var name = btn.getAttribute('data-name');
+  if (!action || !agentId || !name) return;
+  if (action === 'preview') previewArtifact(agentId, name);
+  else if (action === 'view') viewArtifact(agentId, name);
+  else if (action === 'copy') copyArtifact(agentId, name);
+  else if (action === 'download') downloadArtifact(agentId, name);
+});
+</script>
+</body>
+</html>
