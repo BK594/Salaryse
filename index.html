@@ -2123,9 +2123,9 @@ async function buildAndDeployProduct() {
     var userResp = await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}});
     if (!userResp.ok) throw new Error('GitHub auth failed — check token has "repo" scope');
     var ghUser = await userResp.json(); var username = ghUser.login;
-    var slug = brd.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,35)||'saas-product';
+    var slug = brd.replace(/[\x00-\x1f\x7f]/g,' ').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,35)||'saas-product';
     var repoName = slug+'-'+Date.now().toString(36);
-    var createResp = await fetch('https://api.github.com/user/repos',{method:'POST',headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({name:repoName,description:'Live SaaS by AI Software Factory: '+brd.substring(0,80),auto_init:false,private:false})});
+    var createResp = await fetch('https://api.github.com/user/repos',{method:'POST',headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({name:repoName,description:'Live SaaS by AI Software Factory: '+brd.replace(/[\x00-\x1f\x7f]/g,' ').trim().substring(0,80),auto_init:false,private:false})});
     if (!createResp.ok) { var ce=await createResp.json(); throw new Error('Repo failed: '+(ce.message||'')); }
     appendLog('✓ Repo created: '+repoName+'\n');
     setStatus('Step 3/3 — Deploying to GitHub Pages…');
