@@ -729,6 +729,21 @@
         </div>
       </div>
 
+
+      <!-- Build & Deploy Live Product Panel -->
+      <div id="buildDeployPanel" style="margin-top:20px;border:1.5px solid rgba(24,95,165,0.35);border-radius:12px;padding:20px 22px;background:rgba(24,95,165,0.04);">
+        <div style="display:flex;align-items:flex-start;gap:14px;">
+          <div style="font-size:28px;line-height:1;flex-shrink:0;">&#128640;</div>
+          <div style="flex:1;">
+            <div style="font-size:15px;font-weight:700;color:var(--color-text-primary);margin-bottom:4px;">Build &amp; Deploy Live Product</div>
+            <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.55;margin-bottom:14px;">After the pipeline completes, click below to generate the <strong>actual working SaaS application</strong> from your requirement and specs, then deploy it as a live URL on GitHub Pages.</div>
+            <button id="buildDeployBtn" onclick="buildAndDeployProduct()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-sans);border:1.5px solid rgba(24,95,165,0.5);background:rgba(24,95,165,0.12);color:#185FA5;">&#128640; Build &amp; Deploy Live Product</button>
+            <div id="buildDeployStatus" style="font-size:12px;color:var(--color-text-tertiary);margin-top:10px;min-height:16px;"></div>
+            <pre id="buildDeployLog" style="display:block;margin-top:8px;min-height:40px;max-height:160px;overflow-y:auto;font-family:var(--font-mono);font-size:11px;line-height:1.5;color:var(--color-text-secondary);background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:7px;padding:8px 10px;white-space:pre-wrap;word-break:break-word;"></pre>
+            <div id="buildDeployResult" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
       <div id="agentView" class="agent-view"></div>
     </div>
   </div>
@@ -1080,12 +1095,11 @@ function showAgent(agentId) {
       }
       var deploySection = '';
       if (tabId === 'devops') {
-        deploySection = '<div class="section-card" style="margin-top:12px;border:1px solid rgba(59,109,17,0.35);background:rgba(234,243,222,0.3);">' +
-          '<h3 style="margin-bottom:8px;">&#128640; Deploy pipeline output live</h3>' +
-          '<p style="font-size:12px;color:var(--color-text-secondary);line-height:1.5;margin-bottom:12px;">Push all pipeline artifacts as a live website to GitHub Pages. Requires a GitHub Personal Access Token with <strong>repo</strong> scope.</p>' +
-          '<button id="ghDeployBtn" onclick="deployToGitHub()" style="padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-sans);border:1px solid rgba(59,109,17,0.45);background:rgba(59,109,17,0.22);color:#2D5A0E;">&#128640; Deploy to GitHub Pages</button>' +
-          '<div id="ghDeployResult" style="display:none;"></div>' +
-          '<div style="margin-top:10px;font-size:10px;color:var(--color-text-tertiary);line-height:1.5;">No token? Add it in the sidebar under <em>GitHub Deploy Token</em>. Generate at <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" style="color:#185FA5;">github.com/settings/tokens</a></div>' +
+        deploySection = '<div class="section-card" style="margin-top:12px;border:1.5px solid rgba(24,95,165,0.35);background:rgba(24,95,165,0.04);">'+
+          '<h3 style="margin-bottom:8px;">&#128640; Build &amp; Deploy Live Product</h3>'+
+          '<p style="font-size:12px;color:var(--color-text-secondary);line-height:1.55;margin-bottom:12px;">Generate the <strong>actual working SaaS application</strong> from your requirement and pipeline specs, then deploy it live to GitHub Pages as a real URL your users can visit.</p>'+
+          '<button onclick="buildAndDeployProduct()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-sans);border:1.5px solid rgba(24,95,165,0.5);background:rgba(24,95,165,0.12);color:#185FA5;">&#128640; Build &amp; Deploy Live Product</button>'+
+          '<div style="margin-top:10px;font-size:10px;color:var(--color-text-tertiary);line-height:1.5;">Progress shown on the home screen panel below the pipeline overview. Requires GitHub token (repo scope) + Claude API key in sidebar.</div>'+
         '</div>';
       }
       artHtml = '<div class="section-card"><h3>Generated artifacts</h3><div class="artifact-list">' + artRows + '</div></div>' + deploySection;
@@ -2066,7 +2080,86 @@ async function deployToGitHub() {
   }
 }
 
-// // ── Claude API ────────────────────────────────────────────────────────────────
+// // ── Build & Deploy Live Product ──────────────────────────────────────────────────────────────────────────────
+var _buildInProgress = false;
+async function buildAndDeployProduct() {
+  if (_buildInProgress) return;
+  var token = getGithubToken();
+  if (!token) { showToast('⚠ Add your GitHub token in the sidebar first'); return; }
+  var apiKey = getApiKey();
+  if (!apiKey) { showToast('⚠ Add your Claude API key first'); return; }
+  var brd = (document.getElementById('brdInput')||{}).value || '';
+  if (!brd.trim()) { showToast('⚠ Enter a business requirement and run the pipeline first'); return; }
+  var prd = (getAgent('product')||{}).output || '';
+  var design = (getAgent('design')||{}).output || '';
+  var arch = (getAgent('architecture')||{}).output || '';
+  _buildInProgress = true;
+  var buildBtn = document.getElementById('buildDeployBtn');
+  var statusEl = document.getElementById('buildDeployStatus');
+  var logEl = document.getElementById('buildDeployLog');
+  var resultEl = document.getElementById('buildDeployResult');
+  function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
+  function appendLog(msg) { if (logEl) { logEl.textContent += msg; logEl.scrollTop = logEl.scrollHeight; } }
+  if (buildBtn) { buildBtn.disabled = true; buildBtn.textContent = 'Building…'; }
+  if (logEl) logEl.textContent = '';
+  if (resultEl) resultEl.style.display = 'none';
+  setStatus('Step 1/3 — Generating working product code with Claude…');
+  appendLog('Calling Claude to generate the full working application…\n');
+  try {
+    var systemPrompt = 'You are a world-class senior full-stack developer. Your job is to generate a COMPLETE, fully-functional single-file HTML application that implements the SaaS product described in the user message.\n\nCRITICAL RULES:\n1. Output ONLY raw HTML code. Start immediately with <!DOCTYPE html>. Zero explanation, zero markdown, zero code fences.\n2. ALL CSS and JavaScript must be embedded inside the single HTML file.\n3. You may use CDN libraries from cdnjs.cloudflare.com only.\n4. Include a login screen with demo credentials displayed on screen.\n5. After login show a full dashboard with sidebar navigation.\n6. Implement ALL core features from the PRD as working interactive UI.\n7. Populate every screen with realistic demo data.\n8. Multiple views navigable from the sidebar.\n9. Charts, tables, forms that all work.\n10. Production-grade look: professional, responsive, polished.\n11. This deployed URL IS the live product — build something impressive.';
+    var userPrompt = 'Build the complete working SaaS application for this requirement:\n\n'+brd+'\n\n--- PRD ---\n'+prd.substring(0,3000)+'\n\n--- Design System ---\n'+design.substring(0,1500)+'\n\n--- Architecture ---\n'+arch.substring(0,1500)+'\n\nOutput ONLY raw HTML starting with <!DOCTYPE html>. No markdown. No explanation.';
+    var generatedCode = '';
+    await callClaudeAPI(systemPrompt, userPrompt, function(chunk) {
+      generatedCode += chunk;
+      if (logEl) { logEl.textContent = 'Generating… ['+generatedCode.length+' chars]'; logEl.scrollTop = logEl.scrollHeight; }
+    });
+    generatedCode = generatedCode.trim();
+    if (generatedCode.startsWith('```')) { generatedCode = generatedCode.replace(/^```[a-z]*\n?/,'').replace(/\n?```$/,'').trim(); }
+    if (!generatedCode.toLowerCase().includes('<html') && !generatedCode.toLowerCase().includes('<!doctype')) {
+      throw new Error('Claude did not return valid HTML. Run the full pipeline first to build product context, then try again.');
+    }
+    appendLog('✓ Generated '+generatedCode.length+' chars of product code.\n');
+    setStatus('Step 2/3 — Creating GitHub repo…');
+    var userResp = await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}});
+    if (!userResp.ok) throw new Error('GitHub auth failed — check token has "repo" scope');
+    var ghUser = await userResp.json(); var username = ghUser.login;
+    var slug = brd.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,35)||'saas-product';
+    var repoName = slug+'-'+Date.now().toString(36);
+    var createResp = await fetch('https://api.github.com/user/repos',{method:'POST',headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({name:repoName,description:'Live SaaS by AI Software Factory: '+brd.substring(0,80),auto_init:false,private:false})});
+    if (!createResp.ok) { var ce=await createResp.json(); throw new Error('Repo failed: '+(ce.message||'')); }
+    appendLog('✓ Repo created: '+repoName+'\n');
+    setStatus('Step 3/3 — Deploying to GitHub Pages…');
+    var encoded = btoa(unescape(encodeURIComponent(generatedCode)));
+    var pushResp = await fetch('https://api.github.com/repos/'+username+'/'+repoName+'/contents/index.html',{method:'PUT',headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({message:'Deploy live SaaS product via AI Software Factory',content:encoded})});
+    if (!pushResp.ok) { var pe=await pushResp.json(); throw new Error('Push failed: '+(pe.message||'')); }
+    appendLog('✓ Code pushed to GitHub\n');
+    await fetch('https://api.github.com/repos/'+username+'/'+repoName+'/pages',{method:'POST',headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({source:{branch:'main',path:'/'}})});
+    appendLog('✓ GitHub Pages enabled\n');
+    var liveUrl = 'https://'+username+'.github.io/'+repoName+'/';
+    appendLog('\nYour live product URL:\n'+liveUrl+'\n(Goes live in ~60 seconds)');
+    if (resultEl) {
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = '<div style="background:#EAF3DE;border:1px solid #97C459;border-radius:10px;padding:16px 18px;margin-top:14px;">'+
+        '<div style="font-size:14px;font-weight:700;color:#3B6D11;margin-bottom:6px;">✓ Your live SaaS product is deploying!</div>'+
+        '<div style="font-size:12px;color:#555;margin-bottom:12px;">GitHub Pages builds in ~60 seconds. Your product goes live at:</div>'+
+        '<a href="'+liveUrl+'" target="_blank" style="display:block;font-size:14px;font-weight:700;color:#185FA5;word-break:break-all;text-decoration:underline;margin-bottom:10px;">'+liveUrl+'</a>'+
+        '<div style="font-size:11px;color:#888;">Repo: <a href="https://github.com/'+username+'/'+repoName+'" target="_blank" style="color:#185FA5;">github.com/'+username+'/'+repoName+'</a></div>'+'</div>';
+    }
+    setStatus('✓ Done!');
+    if (buildBtn) buildBtn.textContent = '✓ Product Deployed';
+    showToast('Product live at '+liveUrl+' in ~60s');
+  } catch(err) {
+    _buildInProgress = false;
+    if (buildBtn) { buildBtn.disabled=false; buildBtn.textContent='🚀 Build & Deploy Live Product'; }
+    setStatus('✗ '+err.message);
+    appendLog('\n✗ Error: '+err.message);
+    showToast('Error: '+err.message);
+    return;
+  }
+  _buildInProgress = false;
+}
+
+// ── Claude API ────────────────────────────────────────────────────────────────
 async function callClaudeAPI(systemPrompt, userPrompt, onChunk) {
   var apiKey = getApiKey();
   if (!apiKey) throw new Error('API key not set. Please enter your Claude API key in the sidebar and click Save key.');
