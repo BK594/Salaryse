@@ -645,6 +645,17 @@
       <div id="apiKeyStatus" style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px;"></div>
     </div>
 
+    <!-- GitHub Deploy Token -->
+    <div style="padding:10px 14px;border-top:0.5px solid var(--color-border-tertiary);flex-shrink:0;">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:#5f5e5a;margin-bottom:6px;">GitHub Deploy Token</div>
+      <input type="password" id="githubTokenInput" placeholder="ghp_..." style="width:100%;padding:6px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:11px;font-family:var(--font-mono);background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box;" />
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+        <button onclick="saveGithubToken()" style="flex:1;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;font-family:var(--font-sans);border:0.5px solid rgba(59,109,17,0.45);background:rgba(59,109,17,0.18);color:#3B6D11;">Save token</button>
+        <span id="githubTokenSavedTag" style="display:none;font-size:11px;color:#3B6D11;background:#EAF3DE;border:0.5px solid #97C459;padding:2px 7px;border-radius:100px;">&#10003; Saved</span>
+      </div>
+      <div id="githubTokenStatus" style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px;"></div>
+    </div>
+
     <!-- Orchestrator Role Panel -->
     <div class="role-panel" id="rolePanel">
       <div class="role-panel-header" onclick="toggleRolePanel()">
@@ -1067,7 +1078,17 @@ function showAgent(agentId) {
           '<div class="artifact-actions">' + actionBtns + '</div>' +
           '</div>';
       }
-      artHtml = '<div class="section-card"><h3>Generated artifacts</h3><div class="artifact-list">' + artRows + '</div></div>';
+      var deploySection = '';
+      if (tabId === 'devops') {
+        deploySection = '<div class="section-card" style="margin-top:12px;border:1px solid rgba(59,109,17,0.35);background:rgba(234,243,222,0.3);">' +
+          '<h3 style="margin-bottom:8px;">&#128640; Deploy pipeline output live</h3>' +
+          '<p style="font-size:12px;color:var(--color-text-secondary);line-height:1.5;margin-bottom:12px;">Push all pipeline artifacts as a live website to GitHub Pages. Requires a GitHub Personal Access Token with <strong>repo</strong> scope.</p>' +
+          '<button id="ghDeployBtn" onclick="deployToGitHub()" style="padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-sans);border:1px solid rgba(59,109,17,0.45);background:rgba(59,109,17,0.22);color:#2D5A0E;">&#128640; Deploy to GitHub Pages</button>' +
+          '<div id="ghDeployResult" style="display:none;"></div>' +
+          '<div style="margin-top:10px;font-size:10px;color:var(--color-text-tertiary);line-height:1.5;">No token? Add it in the sidebar under <em>GitHub Deploy Token</em>. Generate at <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" style="color:#185FA5;">github.com/settings/tokens</a></div>' +
+        '</div>';
+      }
+      artHtml = '<div class="section-card"><h3>Generated artifacts</h3><div class="artifact-list">' + artRows + '</div></div>' + deploySection;
     } else {
       artHtml = '<div class="empty-state">No artifacts for this agent.</div>';
     }
@@ -1955,7 +1976,97 @@ function initApiKey() {
   }
 }
 
-// ── Claude API ────────────────────────────────────────────────────────────────
+function getGithubToken() {
+  var el = document.getElementById('githubTokenInput');
+  if (el && el.value.trim()) return el.value.trim();
+  return localStorage.getItem('github_pat') || '';
+}
+function saveGithubToken() {
+  var key = (document.getElementById('githubTokenInput') || {}).value || '';
+  if (key.trim()) {
+    localStorage.setItem('github_pat', key.trim());
+    var tag = document.getElementById('githubTokenSavedTag');
+    if (tag) { tag.style.display = 'inline-flex'; setTimeout(function() { tag.style.display = 'none'; }, 2500); }
+    var status = document.getElementById('githubTokenStatus');
+    if (status) status.textContent = 'Token stored in browser localStorage';
+    showToast('GitHub token saved');
+  }
+}
+function initGithubToken() {
+  var stored = localStorage.getItem('github_pat');
+  if (stored) {
+    var el = document.getElementById('githubTokenInput');
+    if (el) el.value = stored;
+    var status = document.getElementById('githubTokenStatus');
+    if (status) status.textContent = 'Token loaded from localStorage';
+  }
+}
+function getPipelineOutputs() {
+  var out = {};
+  var keys = ['product','design','architecture','development','orchestrator','review','security','test','performance','documentation','devops'];
+  var labels = {product:'prd',design:'design',architecture:'arch',development:'dev',orchestrator:'orch',review:'review',security:'security',test:'test',performance:'perf',documentation:'docs',devops:'devops'};
+  keys.forEach(function(k) { out[labels[k]] = (getAgent(k)||{}).output || ''; });
+  return out;
+}
+function generateDeployHTML(brd, outputs) {
+  var title = (brd || 'Pipeline Output').substring(0,60).replace(/[<>&]/g,function(c){return({'<':'&lt;','>':'&gt;','&':'&amp;'})[c];});
+  var labelMap = {prd:'\uD83D\uDCCB Product Requirements',design:'\uD83C\uDFA8 Design System',arch:'\uD83C\uDFD7\uFE0F Architecture',dev:'\uD83D\uDCBB Development',orch:'\uD83D\uDD17 Service Orchestration',review:'\uD83D\uDC40 Code Review',security:'\uD83D\uDD12 Security Audit',test:'\uD83E\uDDEA Test Results',perf:'\u26A1 Performance',docs:'\uD83D\uDCDA Documentation',devops:'\uD83D\uDE80 DevOps & Release'};
+  var sections = Object.keys(labelMap).map(function(k){
+    var val = outputs[k]; if(!val) return '';
+    var esc = val.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return '<section><h2>'+labelMap[k]+'</h2><pre>'+esc+'</pre></section>';
+  }).join('');
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>'+title+'</title>'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f3;color:#1a1a18;padding:24px}'+
+    'header{background:#fff;border:1px solid #ddd;border-radius:12px;padding:24px;margin-bottom:24px}h1{font-size:22px;font-weight:700;margin-bottom:6px}header p{color:#666;font-size:14px}'+
+    '.badge{display:inline-flex;align-items:center;background:#EAF3DE;color:#3B6D11;border:1px solid #97C459;border-radius:100px;padding:3px 12px;font-size:12px;font-weight:600;margin-top:10px}'+
+    'section{background:#fff;border:1px solid #ddd;border-radius:12px;padding:24px;margin-bottom:16px}section h2{font-size:15px;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #eee}'+
+    'pre{font-family:"SF Mono","Fira Code",monospace;font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-word;color:#333}'+
+    'footer{text-align:center;color:#999;font-size:12px;margin-top:24px;padding-top:16px;border-top:1px solid #eee}</style></head>'+
+    '<body><header><h1>&#127981; '+title+'</h1><p>Generated by AI Software Factory Orchestrator &#8212; 11-agent pipeline</p><span class="badge">&#10003; Pipeline Complete</span></header>'+
+    sections+'<footer>Generated with AI Software Factory &middot; '+(new Date().toLocaleDateString())+'</footer></body></html>';
+}
+async function deployToGitHub() {
+  var token = getGithubToken();
+  if (!token) { showToast('\u26A0 Add your GitHub token in the sidebar first'); return; }
+  var deployBtn = document.getElementById('ghDeployBtn');
+  if (deployBtn) { deployBtn.disabled = true; deployBtn.textContent = 'Deploying\u2026'; }
+  var resultDiv = document.getElementById('ghDeployResult');
+  if (resultDiv) resultDiv.style.display = 'none';
+  try {
+    var userResp = await fetch('https://api.github.com/user',{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}});
+    if (!userResp.ok) throw new Error('GitHub auth failed \u2014 check token has "repo" scope');
+    var ghUser = await userResp.json(); var username = ghUser.login;
+    var brd = (document.getElementById('brdInput')||{}).value || 'product';
+    var slug = brd.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').substring(0,35)||'pipeline-output';
+    var repoName = slug+'-'+Date.now().toString(36);
+    var outputs = getPipelineOutputs();
+    var html = generateDeployHTML(brd, outputs);
+    var createResp = await fetch('https://api.github.com/user/repos',{method:'POST',headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({name:repoName,description:'AI Software Factory pipeline output',auto_init:false,private:false})});
+    if (!createResp.ok) { var ce=await createResp.json(); throw new Error('Create repo failed: '+(ce.message||'')); }
+    var encoded = btoa(unescape(encodeURIComponent(html)));
+    var pushResp = await fetch('https://api.github.com/repos/'+username+'/'+repoName+'/contents/index.html',{method:'PUT',headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({message:'Deploy pipeline output via AI Software Factory',content:encoded})});
+    if (!pushResp.ok) { var pe=await pushResp.json(); throw new Error('Push failed: '+(pe.message||'')); }
+    await fetch('https://api.github.com/repos/'+username+'/'+repoName+'/pages',{method:'POST',headers:{'Authorization':'token '+token,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},body:JSON.stringify({source:{branch:'main',path:'/ '.trim()}})});
+    var liveUrl = 'https://'+username+'.github.io/'+repoName+'/';
+    if (resultDiv) {
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<div style="background:#EAF3DE;border:0.5px solid #97C459;border-radius:8px;padding:14px 16px;margin-top:12px;">'+
+        '<div style="font-size:13px;font-weight:700;color:#3B6D11;margin-bottom:6px;">&#10003; Deployed! GitHub Pages is building&#8230;</div>'+
+        '<div style="font-size:11px;color:#555;margin-bottom:10px;">Goes live in ~60 seconds:</div>'+
+        '<a href="'+liveUrl+'" target="_blank" style="font-size:13px;font-weight:600;color:#185FA5;word-break:break-all;text-decoration:underline;">'+liveUrl+'</a>'+
+        '<div style="font-size:10px;color:#888;margin-top:8px;">Repo: github.com/'+username+'/'+repoName+'</div>'+'</div>';
+    }
+    if (deployBtn) deployBtn.textContent = '\u2713 Deployed';
+    showToast('Deployed! Live at '+liveUrl+' in ~60s');
+  } catch(err) {
+    if (deployBtn) { deployBtn.disabled=false; deployBtn.textContent='\uD83D\uDE80 Deploy to GitHub Pages'; }
+    if (resultDiv) { resultDiv.style.display='block'; resultDiv.innerHTML='<div style="background:#FEECEC;border:0.5px solid #F87171;border-radius:8px;padding:12px 14px;color:#991B1B;font-size:12px;margin-top:8px;">&#10007; '+err.message+'</div>'; }
+    showToast('Deploy error: '+err.message);
+  }
+}
+
+// // ── Claude API ────────────────────────────────────────────────────────────────
 async function callClaudeAPI(systemPrompt, userPrompt, onChunk) {
   var apiKey = getApiKey();
   if (!apiKey) throw new Error('API key not set. Please enter your Claude API key in the sidebar and click Save key.');
@@ -2913,6 +3024,7 @@ var _sessionRestored = loadSession();
 renderHome();
 initRolePanel();
 initApiKey();
+initGithubToken();
 if (_sessionRestored) {
   // Re-render pipeline to show restored states
   renderPipeline();
