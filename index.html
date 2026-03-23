@@ -2110,7 +2110,7 @@ async function buildAndDeployProduct() {
     var userPrompt = 'Build the complete working SaaS application for this requirement:\n\n'+brd+'\n\n--- PRD ---\n'+prd.substring(0,3000)+'\n\n--- Design System ---\n'+design.substring(0,1500)+'\n\n--- Architecture ---\n'+arch.substring(0,1500)+'\n\nOutput ONLY raw HTML starting with <!DOCTYPE html>. No markdown. No explanation.';
     var generatedCode = '';
     await callClaudeAPI(systemPrompt, userPrompt, function(chunk) {
-      generatedCode += chunk;
+      generatedCode = chunk; // chunk is cumulative fullText, not delta
       if (logEl) { logEl.textContent = 'Generating… ['+generatedCode.length+' chars]'; logEl.scrollTop = logEl.scrollHeight; }
     });
     generatedCode = generatedCode.trim();
@@ -2174,7 +2174,7 @@ async function callClaudeAPI(systemPrompt, userPrompt, onChunk) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-5',
-      max_tokens: 4000,
+      max_tokens: 8000,
       stream: true,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }]
